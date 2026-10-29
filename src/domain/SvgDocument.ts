@@ -3,6 +3,7 @@ import { Shape } from './Shape';
 
 export class SvgDocument {
   private readonly shapes = new Map<string, Shape>();
+  private readonly roots: Shape[] = [];
 
   constructor(private readonly width: number, private readonly height: number) {
     Numeric.positive(width, 'canvas width');
@@ -11,9 +12,28 @@ export class SvgDocument {
 
   get size(): string { return `${this.width}x${this.height}`; }
 
-  add(shape: Shape): void {
-    if (this.shapes.has(shape.id)) throw new Error(`id already exists: ${shape.id}`);
-    this.shapes.set(shape.id, shape);
+  add(shape: Shape, containerId?: string): void {
+    const parent = containerId === undefined ? undefined : this.findContainer(containerId);
+    const incoming = [...shape.walk()];
+    const ids = new Set<string>();
+    for (const node of incoming) {
+      if (this.shapes.has(node.id) || ids.has(node.id)) throw new Error(`id already exists: ${node.id}`);
+      ids.add(node.id);
+    }
+    if (shape.isAttached) throw new Error(`shape already attached: ${shape.id}`);
+    if (parent) parent.appendChild(shape);
+    else {
+      shape.markAttached();
+      this.roots.push(shape);
+    }
+    for (const node of incoming) this.shapes.set(node.id, node);
+  }
+
+  private findContainer(id: string): Shape {
+    const shape = this.shapes.get(id);
+    if (!shape) throw new Error(`no such container: ${id}`);
+    if (!shape.isContainer) throw new Error(`not a container: ${id}`);
+    return shape;
   }
 
   find(id: string): Shape {
@@ -23,12 +43,17 @@ export class SvgDocument {
   }
 
   tree(id?: string): string {
-    if (id !== undefined) return this.find(id).describe();
-    const rows = [`svg (${this.size})`];
-    const shapes = [...this.shapes.values()];
-    shapes.forEach((shape, index) => {
-      rows.push(`${index === shapes.length - 1 ? '└──' : '├──'} ${shape.describe()}`);
-    });
+    const shape = id === undefined ? undefined : this.find(id);
+    const rows = [shape ? shape.describe() : `svg (${this.size})`];
+    this.appendTreeRows(shape ? shape.getChildren() : this.roots, '', rows);
     return rows.join('\n');
+  }
+
+  private appendTreeRows(shapes: readonly Shape[], prefix: string, rows: string[]): void {
+    shapes.forEach((shape, index) => {
+      const last = index === shapes.length - 1;
+      rows.push(`${prefix}${last ? '└──' : '├──'} ${shape.describe()}`);
+      this.appendTreeRows(shape.getChildren(), prefix + (last ? '    ' : '│   '), rows);
+    });
   }
 }

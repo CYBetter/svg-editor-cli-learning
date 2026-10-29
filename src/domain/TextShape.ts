@@ -15,13 +15,13 @@ export class TextShape extends Shape {
 
   override get label(): string { return `text#${this.id}`; }
 
-  override move(dx: number, dy: number): void {
-    Numeric.finite(dx, 'dx');
-    Numeric.finite(dy, 'dy');
+  protected override prepareMove(dx: number, dy: number): () => void {
     const nextX = Numeric.finite(this.x + dx, 'x');
     const nextY = Numeric.finite(this.y + dy, 'y');
-    this.x = nextX;
-    this.y = nextY;
+    return () => {
+      this.x = nextX;
+      this.y = nextY;
+    };
   }
 
   override describe(): string {

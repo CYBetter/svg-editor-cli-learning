@@ -5,10 +5,10 @@
 
 ## 当前增量
 
-第一轮实现最小矩形编辑流程；第二轮增加圆形；第三轮增加椭圆、线段和文字。
-当前支持五类根级叶子图形的 create / move / tree、输入校验和失败时保持状态。
-24 组自动测试通过。用户已要求继续推进，尚未反馈具体手动验收结果。
-g 容器、in 子句、其他编辑命令、撤销重做与 SVG 读写留到后续增量。
+第一轮实现最小矩形编辑流程；第二轮增加圆形；第三轮增加椭圆、线段和文字；第四轮加入 g 容器。
+当前支持六种类型的 create、create ... in、整棵子树的 move / tree、输入校验和失败时保持状态。
+34 组自动测试通过。用户已要求继续推进，尚未反馈具体手动验收结果。
+其余编辑命令、撤销重做与 SVG 读写留到后续增量。
 
 ## Git 迭代约定
 
@@ -121,7 +121,42 @@ create text empty 0 20 ""
 例如带引号的 Windows 路径如以反斜杠结尾，结束引号前应输入两个反斜杠。
 文字在 tree 中使用 JSON 风格的引号与转义显示，便于识别内容边界。
 
+## 第四轮体验：移动一个节点，矩形与文字一起移动
+
+```text
+init 800 600
+create g node
+create rect box 10 20 100 50 in node
+create text label 25 50 "开始" in node
+move node 30 10
+tree node
+```
+
+预期结果：
+
+```text
+g#node
+├── rect#box x=40 y=30 w=100 h=50
+└── text#label (55,60) "开始"
+```
+
+容器也是 Shape，对外仍使用 move；内部递归处理孩子，这就是本轮落实的 Composite 语义。
+所有后代先计算并检查新坐标，全部成功才修改。任何一个后代失败，整组保持不变。
+`tree` 显示全文档，`tree node` 只显示该子树。嵌套创建用 `create g child in node`。
+`in` 尾缀只识别未加引号的关键字，`create text t 0 0 "in" in node` 的文字不会被当成语法。
+examples/step-04.commands.txt 包含课设两节点流程图的创建与组移动部分；尚未包含 undo/set/save。
+
 ## 本轮阅读路径
+
+1. [GroupShape.ts](src/domain/GroupShape.ts)：容器保存子图形，递归准备移动；子节点数组只暴露冻结快照。
+2. [Shape.ts](src/domain/Shape.ts)：公共 move 入口校验位移，调用受保护的 prepareMove，再同步执行更新。
+3. [SvgDocument.ts](src/domain/SvgDocument.ts)：维护根节点顺序和全局 id 索引，统一处理带父容器的插入。
+
+准备阶段只计算和检查，提交回调只赋值；这些回调不公开、不保存，不作为撤销历史。
+[MoveCommand.ts](src/application/commands/MoveCommand.ts) 与 [TreeCommand.ts](src/application/commands/TreeCommand.ts) 继续复用。
+本轮 CreateCommand 增加了父容器参数，领域对象增加树结构能力，因此是一次有依据的架构演进。
+
+## 前几轮阅读回顾
 
 1. [LineShape.ts](src/domain/LineShape.ts)：一次移动要更新两个端点，先检查四个新坐标，再一起赋值。
 2. [TextShape.ts](src/domain/TextShape.ts)：移动位置时保留文本，描述中正确显示引号。
@@ -138,7 +173,21 @@ create text empty 0 20 ""
 这验证了统一行为接口的价值，也说明几何字段不必相同。
 
 设计取舍：各类的移动实现有少量相似代码，当前保留在各自类中。
-本轮的线段有两个端点，下一轮的容器则要移动孩子，因此不为少量重复增加“统一位置”基类。
+线段有两个端点，容器要移动孩子，因此不为少量重复增加“统一位置”基类。
+
+## 后续项目安排
+
+按功能检查点推进；复杂阶段拆成两轮，每轮验证后独立提交、推送，再结合用户反馈继续。
+
+| 后续阶段 | 主要内容 | 完成标志 |
+| --- | --- | --- |
+| 1. 属性与几何编辑 | scale、set、show | 位置与尺寸按课设缩放；白名单和文字修改正确；容器行为明确 |
+| 2. 树结构编辑 | 先 delete/front/back，再 group/addto/ungroup | 删除整棵子树；正确排序和迁移；无环、无重复 id、失败不变 |
+| 3. 撤销与辅助命令 | undo/redo、help、canvas | 一条编辑一个撤销单元；新编辑清 redo；查询不入栈；init/canvas 修改后禁用历史 |
+| 4. SVG 持久化 | 先 save，再 read、补 id 与历史边界 | 浏览器可预览；支持范围内读写一致；失败不替换文档或改变历史 |
+| 5. 最终验收 | 全命令回放、架构检查、文档修订、final tag | 课设示例与边界测试通过，真实过程记录完整，远程代码与 tag 一致 |
+
+详细验收点和待讨论取舍见 doc/README.md 的“后续迭代安排”。box 与动态插件不属于本阶段。
 
 独立远程仓库：https://github.com/CYBetter/svg-editor-cli-learning
 

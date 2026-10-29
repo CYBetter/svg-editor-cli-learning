@@ -17,14 +17,14 @@ export class CircleShape extends Shape {
 
   override get label(): string { return `circle#${this.id}`; }
 
-  override move(dx: number, dy: number): void {
-    Numeric.finite(dx, 'dx');
-    Numeric.finite(dy, 'dy');
+  protected override prepareMove(dx: number, dy: number): () => void {
     // 移动只改变圆心；同样先检查全部结果再修改。
     const nextCx = Numeric.finite(this.cx + dx, 'cx');
     const nextCy = Numeric.finite(this.cy + dy, 'cy');
-    this.cx = nextCx;
-    this.cy = nextCy;
+    return () => {
+      this.cx = nextCx;
+      this.cy = nextCy;
+    };
   }
 
   override describe(): string {

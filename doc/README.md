@@ -3,15 +3,15 @@
 ## 本轮边界
 
 第一轮实现 init、create rect、tree（含 tree id）、move；第二轮增加 circle；第三轮增加 ellipse、line、text。
-五类叶子的创建、移动和查询复用原命令；g 容器、in 子句、其他编辑命令、撤销重做和文件读写在后续增量实现。
+第四轮增加 g 容器、create ... in、嵌套 tree 和整组 move；后续继续其他编辑命令、撤销重做和文件读写。
 当前不是完整的 Phase 1 提交版本；不创建 final tag。
 
 ## 模块职责与依赖
 
 | 目录 | 职责 | 允许依赖 |
 | --- | --- | --- |
-| src/domain | Shape、五类叶子图形、SvgDocument；封装几何行为、唯一 id 和查找 | 本模块、语言标准库 |
-| src/application | 当前文档会话、Command 与具体命令；组织一次操作 | domain、本模块 |
+| src/domain | Shape、五类叶子、GroupShape、SvgDocument；封装几何行为、对象树、唯一 id 和查找 | 本模块、语言标准库 |
+| src/application | 当前文档会话、Command 与具体命令；组织一次操作，定义输入 token 的只读元数据 | domain、本模块 |
 | src/cli | 分词、唯一命令分派入口、终端读写和错误显示 | application，本模块 |
 | src/Main.ts | 组装并启动应用 | cli、application |
 
@@ -35,14 +35,15 @@ application --> domain
 
 - Command（任务书要求）：InitCommand、CreateCommand、MoveCommand、TreeCommand 实现相同 execute 契约。CLI 统一执行命令，不包揽业务。
 - 多态与封装：Shape 定义行为，RectShape/CircleShape/EllipseShape/LineShape/TextShape 各自实现几何变化；文档保存 Shape，MoveCommand 不判断图形类型。
-- Composite：后续容器增量再实现，并用嵌套组移动验证。当前不能声称已实现 Composite。
+- Composite：GroupShape 与叶子均为 Shape；组递归准备孩子的移动，tree 通过统一的 getChildren 遍历。已用嵌套组移动验证；scale/set/delete 的统一操作待对应增量实现。
+- 移动的准备与提交：Shape.move 先检查位移，再调用受保护的 prepareMove。叶子计算新坐标，组汇总孩子的更新；全部准备成功才同步执行只赋值的回调。回调不保存为历史，不把此机制表述为所有编辑命令的通用事务。
 - 仅两处名称分派：CommandDispatcher（命令名 → 命令类）与 ShapeFactory（类型名 → 图形类）。两处均标注待重构为注册入口；本轮不制作动态插件框架。
 
 ## 变化点假设与取舍
 
 1. 新增图形：保留 Shape 行为契约和集中工厂；按增量增加具体类。
 2. 新增命令或撤销：命令对象保留操作意图；历史策略在后续比较逆操作与快照后确定。
-3. 图形嵌套：当前文档管理平面集合，下一阶段改为对象树，并扩展全局 id 检查。
+3. 图形嵌套：文档维护根节点顺序及全局 id 索引；GroupShape 管理私有孩子。后续迁移和删除需同步维护树与索引，并扩展父级管理。
 4. 终端以外的入口：命令和领域对象不依赖终端，可以复用。
 5. 文件读写：届时新增基础设施模块，当前不提前创建空接口。
 
@@ -55,12 +56,34 @@ application --> domain
 - 空行和 # 开头的整行注释跳过，颜色参数中的 # 作为普通文本。
 - text 内容支持中文、空格、空字符串及转义引号；移动不改变文本。
 - 双引号分组是任务书要求；引号前的反斜杠奇偶转义为本实现约定：2n 个反斜杠产生 n 个并切换引号状态，2n+1 个产生 n 个及字面引号。其他位置反斜杠原样保留。
+- create 尾缀只识别末尾未加引号的 in 和其目标；quoted 元数据通过 CommandToken 传递，避免把文字内容误当成语法。
+- 根元素由 SvgDocument 表示，没有伪造可被用户寻址的 g 根节点。
+- appendChild/markAttached 是树结构内部接口，只允许文档插入流程使用；编辑命令不可绕过文档直接修改层级。它们检查重复挂接、自包含，子节点视图是冻结快照。
 
 ## Git 记录规则
 
 根据用户明确要求，每轮有效更新在验证后形成提交，并推送到独立远程仓库。
 提交包含对应代码、测试和文档修订；每轮报告实际提交号与同步状态。
 不改写已有提交来伪造学习过程，用户手动验收和观点仅按其实际反馈记录。
+
+## 后续迭代安排
+
+以下是当前方案，按功能和验收点安排；每阶段可分成一至两轮，不一次实现完全部阶段。
+每轮依次完成目标说明、有限实现、测试/代码复核、过程记录、Git 提交和推送，再结合用户反馈继续。
+
+| 阶段 | 实现范围 | 验收重点 | 学习与设计讨论 |
+| --- | --- | --- | --- |
+| 属性与几何编辑 | scale、set、show | factor > 0；缩放同乘位置与尺寸；非法属性/数值失败不变；文字内容可改；show 显示父级与属性 | 几何与样式的区别；普通 g 样式保留继承语义，不能照搬未来 box 的传播规则 |
+| 树结构编辑 A | delete、front、back | 删除容器包含全部后代并释放 id；调整顺序仅限同级；tree 正确反映结果 | 对象树与索引如何一起保持一致；数组顺序与 SVG 绘制顺序的关系 |
+| 树结构编辑 B | group、addto、ungroup | 防祖先/后代成环；分组保序；addto 放最后；解组原位提升；按题意拒绝解散根级 g；失败不变 | 先讨论跨父级分组放置与顺序（题目未完全定义），再写入设计约定 |
+| 撤销与辅助命令 | undo、redo；help、canvas | 一条编辑一个单元；撤销后新编辑清 redo；失败/查询不破坏历史；init 与 canvas 修改后禁用历史 | 对比逆操作和快照，选择能正确恢复几何、文本、树和顺序的方案；先提供建议再讨论取舍 |
+| SVG 保存 | save、默认路径规则、IO 历史边界 | 正确命名空间与文本转义；省略未指定样式；保存失败不清历史；成功保存后禁用 undo/redo；浏览器预览 | 模型与 XML/文件 IO 的职责分离；首次无路径保存与默认路径约定 |
+| SVG 读取 | read、补 id、往返验证 | 预留全部显式 id，再补缺失 id 并警告；重复 id/损坏文件不替换当前文档；读回层级、顺序和样式一致 | 明确外部 SVG 支持范围；背景示例含 transform，需要在实现前讨论是否纳入，不能静默丢弃 |
+| 最终验收与交付 | 完整示例、边界测试、架构审查、文档与 final | 第 6 节和 6.1 版本 A 回放；错误文本及状态核对；一类一文件、依赖与两处分派检查；远程 main 与 final 均验证 | 对照最初方案解释真实改动；过程记录不代写尚未发生的学习体验 |
+
+文件读写加入时再引入 infrastructure 及必要接口；展示和树查询复杂化时评估提取 presentation，实际改动同步修订上方依赖图。
+box、动态插件框架和图形界面均不列入本期交付。
+当前尚未提供课设截止日期，最终 tag 的实际完成时间需要在截止时间之前；不把本表当作已确认的日历排期。
 
 # 过程记录
 
@@ -104,20 +127,33 @@ application --> domain
 - 独立只读复核检查线段原子性、文字转义和名称分派位置，未发现本轮需要修复的问题。
 - 用户目前的参与是确定推进节奏和 Git 要求；本轮具体代码理解、运行体验与意见尚待反馈，不预先写成已完成。
 
+## 2026-10-29：容器与嵌套移动
+
+- 用户要求继续并给出后续项目安排，本轮限定为 g / in / tree / move，并加入按验收点分阶段的后续计划。
+- 新增 GroupShape，将原有平面文档改为根节点列表、容器子列表和全局 id 索引；插入前完成父容器与 id 校验。
+- 直接逐个调用 child.move 会有半组已移动的问题，因此把原有叶子的“计算/校验后赋值”拆成 prepareMove 和同步提交，组先准备所有孩子后再一起提交。
+- prepareMove 及跨子节点辅助方法设为 protected，外部命令仍调用 move，不暴露可长期保存的更新回调。空组也在 Shape.move 中检查有限位移。
+- 新增只读 CommandToken 接口记录是否带引号；分发器统一传递元数据，CreateCommand 解析未加引号的 in 尾缀，不按图形类型猜测参数。
+- MoveCommand、TreeCommand 沿用原实现；CreateCommand 与文档因父容器需求演进，改变的位置与新增职责对应。
+- 新增 10 组测试，总计 34 组通过。实际回放课设流程图的创建及移动部分；撤销、修改文字和保存尚未实现，没有把整个示例标为完成。
+- 独立只读复核检查整组移动原子性、索引同步和 in 尾缀解析，未发现本轮需要修复的问题；未来树重排需重新验证归属与索引规则。
+- 用户未提供本轮手动验收反馈；后续记录其实际提出的问题与观点。
+
 # 一致性自查
 
-当前实现与三层方案一致，src 下 19 个类各自放在同名文件。
+当前实现与三层方案一致，src 下 20 个类各自放在同名文件，另有 CommandToken 只读输入接口。
 
 - 抽查 MoveCommand：只依赖 application 与 domain，调用 shape.move，不直接修改几何字段。
-- 抽查五类图形及 SvgDocument：只依赖 domain，没有 Node、终端或文件 IO 依赖。
+- 抽查六类图形及 SvgDocument：只依赖 domain，没有 Node、终端或文件 IO 依赖。
 - CommandDispatcher 依赖 application，集中处理命令名称；ShapeFactory 集中处理图形类型名称。代码中两处都有待重构说明。
 - CommandTokenizer 和 Numeric 分别放在 cli 与 domain，是各自职责的辅助类，不增加反向依赖。
-- 五类叶子增量沿用原命令与文档管理逻辑，没有新增分散的图形类型判断。
-- Composite、历史管理和持久化尚未实现；因此这里只是前三个增量的一致性检查。
+- 容器增量修改 CreateCommand 与文档职责，移动/查询命令沿用原实现；容器能力通过多态提供，没有按 tag 添加分散的判断。
+- CommandToken 是不负责业务行为的只读输入元数据，不是公共数据袋形式的图形模型；application 不反向依赖 cli。
+- Composite 已在移动与遍历中实现；其他编辑操作、历史管理和持久化尚未实现，因此这里只是前四个增量的一致性检查。
 
 # 质量保证手段
 
-执行 `npm test`：TypeScript 严格编译通过，Node 内置测试运行器 24/24 通过（第一轮 9 组，第二轮 5 组，第三轮 10 组）。
+执行 `npm test`：TypeScript 严格编译通过，Node 内置测试运行器 34/34 通过（第一轮 9 组，第二轮 5 组，第三轮 10 组，第四轮 10 组）。
 
 | 验证内容 | 结果 |
 | --- | --- |
@@ -137,12 +173,17 @@ application --> domain
 | 中文、空文本、带空格内容与字面引号 | 通过 |
 | 引号前反斜杠奇偶规则、普通反斜杠与 UNC 文本 | 通过 |
 | 五类图形共享 id、第三轮真实 CLI 脚本 | 通过 |
+| 嵌套 tree、tree id、选择子树移动与五类孩子各移动一次 | 通过 |
+| 末尾子孙溢出时整组原样保留；空组仍校验位移 | 通过 |
+| 父容器错误、跨层 id 重复、失败后 id 仍可用 | 通过 |
+| 带引号的 in、名为 in 的容器、只读孩子列表、防循环/重复挂接 | 通过 |
+| 100 层容器嵌套、课设流程图创建与组移动部分的真实 CLI 回放 | 通过 |
 | 交互终端 svg> 提示符和最小命令链 | AI 验证通过 |
 | 用户手动验收与关键代码讨论 | 待用户反馈 |
 
-功能测试文件为 tests/FirstIncrement.test.ts、tests/CircleIncrement.test.ts、tests/LeafShapesIncrement.test.ts 与 tests/CommandTokenizer.test.ts；回放脚本为 examples/step-01.commands.txt 至 examples/step-03.commands.txt。
+功能测试文件为 tests/FirstIncrement.test.ts、tests/CircleIncrement.test.ts、tests/LeafShapesIncrement.test.ts、tests/CommandTokenizer.test.ts 与 tests/GroupIncrement.test.ts；回放脚本为 examples/step-01.commands.txt 至 examples/step-04.commands.txt。
 一组测试可以覆盖多个边界用例；以上表格不表示每行均对应一个独立测试。
 
 本轮分词器的转义语法已明确，但保存/读取尚未实现；反斜杠文本测试不能代替未来真实文件路径验收。
-当前只有单个叶子图形变更的失败不变保证；后续对容器及多对象修改，需要另行验证整条命令的原子性。
+当前叶子及整组 move 都有失败不变保证；后续其他多对象编辑操作仍需分别验证整条命令的原子性。
 用户手动体验与设计讨论独立记录，未实现功能不记为测试通过。

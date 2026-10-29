@@ -1,5 +1,6 @@
 import { CircleShape } from './CircleShape';
 import { EllipseShape } from './EllipseShape';
+import { GroupShape } from './GroupShape';
 import { LineShape } from './LineShape';
 import { Numeric } from './Numeric';
 import { RectShape } from './RectShape';
@@ -9,6 +10,10 @@ import { TextShape } from './TextShape';
 export class ShapeFactory {
   create(type: string, id: string, params: readonly string[]): Shape {
     // 唯一图形名称分派入口；待重构：后续改为类型注册。
+    if (type === 'g') {
+      if (params.length !== 0) throw new Error('usage: create g <id>');
+      return new GroupShape(id);
+    }
     if (type === 'rect') {
       if (params.length < 4 || params.length > 5) {
         throw new Error('usage: create rect <id> <x> <y> <w> <h> [fill]');

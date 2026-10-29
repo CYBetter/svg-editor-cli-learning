@@ -19,18 +19,18 @@ export class LineShape extends Shape {
 
   override get label(): string { return `line#${this.id}`; }
 
-  override move(dx: number, dy: number): void {
-    Numeric.finite(dx, 'dx');
-    Numeric.finite(dy, 'dy');
+  protected override prepareMove(dx: number, dy: number): () => void {
     // 两个端点共四个坐标，全部计算成功后再一起更新。
     const nextX1 = Numeric.finite(this.x1 + dx, 'x1');
     const nextY1 = Numeric.finite(this.y1 + dy, 'y1');
     const nextX2 = Numeric.finite(this.x2 + dx, 'x2');
     const nextY2 = Numeric.finite(this.y2 + dy, 'y2');
-    this.x1 = nextX1;
-    this.y1 = nextY1;
-    this.x2 = nextX2;
-    this.y2 = nextY2;
+    return () => {
+      this.x1 = nextX1;
+      this.y1 = nextY1;
+      this.x2 = nextX2;
+      this.y2 = nextY2;
+    };
   }
 
   override describe(): string {

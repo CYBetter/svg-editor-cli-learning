@@ -19,13 +19,13 @@ export class EllipseShape extends Shape {
 
   override get label(): string { return `ellipse#${this.id}`; }
 
-  override move(dx: number, dy: number): void {
-    Numeric.finite(dx, 'dx');
-    Numeric.finite(dy, 'dy');
+  protected override prepareMove(dx: number, dy: number): () => void {
     const nextCx = Numeric.finite(this.cx + dx, 'cx');
     const nextCy = Numeric.finite(this.cy + dy, 'cy');
-    this.cx = nextCx;
-    this.cy = nextCy;
+    return () => {
+      this.cx = nextCx;
+      this.cy = nextCy;
+    };
   }
 
   override describe(): string {
