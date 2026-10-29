@@ -49,6 +49,15 @@ export class SvgDocument {
     return rows.join('\n');
   }
 
+  show(id: string): string {
+    const shape = this.find(id);
+    let parent = 'svg';
+    for (const candidate of this.shapes.values()) {
+      if (candidate.getChildren().includes(shape)) { parent = candidate.label; break; }
+    }
+    return [`${shape.label}  parent=${parent}`, ...shape.details().map(line => `  ${line}`)].join('\n');
+  }
+
   private appendTreeRows(shapes: readonly Shape[], prefix: string, rows: string[]): void {
     shapes.forEach((shape, index) => {
       const last = index === shapes.length - 1;

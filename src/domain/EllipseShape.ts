@@ -6,15 +6,16 @@ export class EllipseShape extends Shape {
     id: string,
     private cx: number,
     private cy: number,
-    private readonly rx: number,
-    private readonly ry: number,
-    private readonly fill?: string,
+    private rx: number,
+    private ry: number,
+    fill?: string,
   ) {
     super(id);
     Numeric.finite(cx, 'cx');
     Numeric.finite(cy, 'cy');
     Numeric.nonNegative(rx, 'rx');
     Numeric.nonNegative(ry, 'ry');
+    if (fill !== undefined) this.setAttribute('fill', fill);
   }
 
   override get label(): string { return `ellipse#${this.id}`; }
@@ -28,8 +29,29 @@ export class EllipseShape extends Shape {
     };
   }
 
+  protected override prepareScale(factor: number): () => void {
+    const cx = Numeric.finite(this.cx * factor, 'cx');
+    const cy = Numeric.finite(this.cy * factor, 'cy');
+    const rx = Numeric.finite(this.rx * factor, 'rx');
+    const ry = Numeric.finite(this.ry * factor, 'ry');
+    return () => { this.cx = cx; this.cy = cy; this.rx = rx; this.ry = ry; };
+  }
+
+  protected override setGeometryAttribute(attribute: string, value: string): void {
+    if (attribute === 'cx' || attribute === 'cy' || attribute === 'rx' || attribute === 'ry') {
+      const parsed = Numeric.parse(value, attribute);
+      if (attribute === 'rx' || attribute === 'ry') Numeric.nonNegative(parsed, attribute);
+      this[attribute] = parsed;
+      return;
+    }
+    super.setGeometryAttribute(attribute, value);
+  }
+
+  protected override geometryAttributes(): Readonly<Record<string, number>> {
+    return { cx: this.cx, cy: this.cy, rx: this.rx, ry: this.ry };
+  }
+
   override describe(): string {
-    const style = this.fill === undefined ? '' : ` fill=${this.fill}`;
-    return `${this.label} cx=${this.cx} cy=${this.cy} rx=${this.rx} ry=${this.ry}${style}`;
+    return `${this.label} cx=${this.cx} cy=${this.cy} rx=${this.rx} ry=${this.ry}${this.describeStyles()}`;
   }
 }

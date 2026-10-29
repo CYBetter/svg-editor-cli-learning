@@ -1,0 +1,18 @@
+# 第五轮：缩放位置与尺寸，修改样式与文字，查询直接父级
+init 800 600
+create g node
+create rect box 10 20 100 50 in node
+create text label 25 50 "开始" in node
+set node fill blue
+set box stroke black
+set box stroke-width 2
+scale node 2
+set label text "处理数据 v2"
+show node
+show box
+show label
+tree
+# 缩放失败应保持刚才的文档
+scale node 0
+set box width -1
+show box

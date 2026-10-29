@@ -6,13 +6,14 @@ export class CircleShape extends Shape {
     id: string,
     private cx: number,
     private cy: number,
-    private readonly radius: number,
-    private readonly fill?: string,
+    private radius: number,
+    fill?: string,
   ) {
     super(id);
     Numeric.finite(cx, 'cx');
     Numeric.finite(cy, 'cy');
     Numeric.nonNegative(radius, 'r');
+    if (fill !== undefined) this.setAttribute('fill', fill);
   }
 
   override get label(): string { return `circle#${this.id}`; }
@@ -27,8 +28,30 @@ export class CircleShape extends Shape {
     };
   }
 
+  protected override prepareScale(factor: number): () => void {
+    const cx = Numeric.finite(this.cx * factor, 'cx');
+    const cy = Numeric.finite(this.cy * factor, 'cy');
+    const radius = Numeric.finite(this.radius * factor, 'r');
+    return () => { this.cx = cx; this.cy = cy; this.radius = radius; };
+  }
+
+  protected override setGeometryAttribute(attribute: string, value: string): void {
+    if (attribute === 'cx' || attribute === 'cy') {
+      this[attribute] = Numeric.parse(value, attribute);
+      return;
+    }
+    if (attribute === 'r') {
+      this.radius = Numeric.nonNegative(Numeric.parse(value, attribute), attribute);
+      return;
+    }
+    super.setGeometryAttribute(attribute, value);
+  }
+
+  protected override geometryAttributes(): Readonly<Record<string, number>> {
+    return { cx: this.cx, cy: this.cy, r: this.radius };
+  }
+
   override describe(): string {
-    const style = this.fill === undefined ? '' : ` fill=${this.fill}`;
-    return `${this.label} cx=${this.cx} cy=${this.cy} r=${this.radius}${style}`;
+    return `${this.label} cx=${this.cx} cy=${this.cy} r=${this.radius}${this.describeStyles()}`;
   }
 }

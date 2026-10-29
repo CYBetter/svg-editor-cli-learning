@@ -30,5 +30,10 @@ export class GroupShape extends Shape {
     return () => { for (const apply of updates) apply(); };
   }
 
-  override describe(): string { return this.label; }
+  protected override prepareScale(factor: number): () => void {
+    const updates = this.children.map(child => GroupShape.prepareChildScale(child, factor));
+    return () => { for (const apply of updates) apply(); };
+  }
+
+  override describe(): string { return this.label + this.describeStyles(); }
 }

@@ -3,7 +3,8 @@
 ## 本轮边界
 
 第一轮实现 init、create rect、tree（含 tree id）、move；第二轮增加 circle；第三轮增加 ellipse、line、text。
-第四轮增加 g 容器、create ... in、嵌套 tree 和整组 move；后续继续其他编辑命令、撤销重做和文件读写。
+第四轮增加 g 容器、create ... in、嵌套 tree 和整组 move；第五轮增加 scale、set、show。
+后续继续树结构编辑、撤销重做和文件读写。
 当前不是完整的 Phase 1 提交版本；不创建 final tag。
 
 ## 模块职责与依赖
@@ -33,10 +34,11 @@ application --> domain
 
 ## 设计模式
 
-- Command（任务书要求）：InitCommand、CreateCommand、MoveCommand、TreeCommand 实现相同 execute 契约。CLI 统一执行命令，不包揽业务。
+- Command（任务书要求）：InitCommand、CreateCommand、MoveCommand、TreeCommand、ScaleCommand、SetCommand、ShowCommand 实现相同 execute 契约。CLI 统一执行命令，不包揽业务。
 - 多态与封装：Shape 定义行为，RectShape/CircleShape/EllipseShape/LineShape/TextShape 各自实现几何变化；文档保存 Shape，MoveCommand 不判断图形类型。
-- Composite：GroupShape 与叶子均为 Shape；组递归准备孩子的移动，tree 通过统一的 getChildren 遍历。已用嵌套组移动验证；scale/set/delete 的统一操作待对应增量实现。
-- 移动的准备与提交：Shape.move 先检查位移，再调用受保护的 prepareMove。叶子计算新坐标，组汇总孩子的更新；全部准备成功才同步执行只赋值的回调。回调不保存为历史，不把此机制表述为所有编辑命令的通用事务。
+- Composite：GroupShape 与叶子均为 Shape；组递归准备孩子的移动/缩放，tree 通过统一的 getChildren 遍历。普通 g 的 set 只改变自身样式，不向孩子复制；delete 待后续实现。
+- 移动与缩放的准备与提交：Shape.move/scale 先校验参数，再调用受保护的 prepareMove/prepareScale。叶子计算新几何值，组汇总孩子的更新；全部准备成功才同步执行只赋值的回调。回调不保存为历史，不把此机制表述为所有编辑命令的通用事务。
+- 属性封装：Shape 私有样式集合统一管理 fill/stroke/stroke-width；各子类通过 setGeometryAttribute 校验自身白名单。单属性先校验再赋值；geometryAttributes 返回展示用快照，字段仍是私有状态。
 - 仅两处名称分派：CommandDispatcher（命令名 → 命令类）与 ShapeFactory（类型名 → 图形类）。两处均标注待重构为注册入口；本轮不制作动态插件框架。
 
 ## 变化点假设与取舍
@@ -46,6 +48,7 @@ application --> domain
 3. 图形嵌套：文档维护根节点顺序及全局 id 索引；GroupShape 管理私有孩子。后续迁移和删除需同步维护树与索引，并扩展父级管理。
 4. 终端以外的入口：命令和领域对象不依赖终端，可以复用。
 5. 文件读写：届时新增基础设施模块，当前不提前创建空接口。
+6. 父级查询：show 暂时扫描树的直接孩子找到父级，复杂度 O(N)，避免提前维护额外父级索引。后续树迁移阶段结合变更操作重新评估。
 
 ## 本轮具体约定
 
@@ -53,6 +56,10 @@ application --> domain
 - 几何坐标允许负数和小数；矩形宽高、圆形半径、椭圆两条半径为有限非负数，允许零尺寸。几何尺寸非负是本实现的校验约定。
 - 移动先计算并检查全部新坐标，再统一赋值，避免一项成功一项失败。
 - fill / stroke 省略时保持未指定；线段的可选样式是 stroke。
+- scale 的正因子同时乘位置和尺寸；stroke-width 属于样式，不参与几何缩放。text 只缩放 x/y，不修改内容，也不引入白名单外的 font-size。
+- set 仅接受课设公共样式和各类型几何白名单，文字另有 text 伪属性；普通 g 只支持公共样式。stroke-width 采用有限非负约定，颜色字符串暂不进行完整 CSS 语法校验。
+- 组样式保存在组，未指定子样式保持缺省、显式子样式保持原值；后续 SVG 输出保留这种继承关系。本轮只验收模型存储，未验收浏览器渲染。
+- show 显示直接父级和自身显式属性，根级父级为 svg；几何字段使用 width/height 等完整名称，文字用引号显示；不计算继承后的最终样式。
 - 空行和 # 开头的整行注释跳过，颜色参数中的 # 作为普通文本。
 - text 内容支持中文、空格、空字符串及转义引号；移动不改变文本。
 - 双引号分组是任务书要求；引号前的反斜杠奇偶转义为本实现约定：2n 个反斜杠产生 n 个并切换引号状态，2n+1 个产生 n 个及字面引号。其他位置反斜杠原样保留。
@@ -73,7 +80,7 @@ application --> domain
 
 | 阶段 | 实现范围 | 验收重点 | 学习与设计讨论 |
 | --- | --- | --- | --- |
-| 属性与几何编辑 | scale、set、show | factor > 0；缩放同乘位置与尺寸；非法属性/数值失败不变；文字内容可改；show 显示父级与属性 | 几何与样式的区别；普通 g 样式保留继承语义，不能照搬未来 box 的传播规则 |
+| 属性与几何编辑（已实现） | scale、set、show | 第五轮新增 10 组测试通过；用户手动反馈待补充 | 几何与样式的区别；普通 g 样式保留继承语义，不能照搬未来 box 的传播规则 |
 | 树结构编辑 A | delete、front、back | 删除容器包含全部后代并释放 id；调整顺序仅限同级；tree 正确反映结果 | 对象树与索引如何一起保持一致；数组顺序与 SVG 绘制顺序的关系 |
 | 树结构编辑 B | group、addto、ungroup | 防祖先/后代成环；分组保序；addto 放最后；解组原位提升；按题意拒绝解散根级 g；失败不变 | 先讨论跨父级分组放置与顺序（题目未完全定义），再写入设计约定 |
 | 撤销与辅助命令 | undo、redo；help、canvas | 一条编辑一个单元；撤销后新编辑清 redo；失败/查询不破坏历史；init 与 canvas 修改后禁用历史 | 对比逆操作和快照，选择能正确恢复几何、文本、树和顺序的方案；先提供建议再讨论取舍 |
@@ -139,9 +146,20 @@ box、动态插件框架和图形界面均不列入本期交付。
 - 独立只读复核检查整组移动原子性、索引同步和 in 尾缀解析，未发现本轮需要修复的问题；未来树重排需重新验证归属与索引规则。
 - 用户未提供本轮手动验收反馈；后续记录其实际提出的问题与观点。
 
+## 2026-10-29：几何缩放、属性编辑与查询
+
+- 用户要求继续，本轮按既有安排限定为 scale、set、show，没有提前实现剩余命令。
+- 新增三个 Command，公共样式从叶子的单个字段收拢至 Shape 私有集合；几何值仍在各具体类内，由各类执行属性白名单和数值校验。
+- 复用上一轮准备后统一提交的做法实现整组缩放；正因子也乘位置，样式与文字内容保持不变。空组在公共入口照常验证因子。
+- 普通 g 只保存自身的样式；显式子样式保留，不照搬未来 box 的传播规则。show 输出直接父级和显式属性，不把继承值伪装成对象自己的值。
+- 新增 10 组测试，包括五种叶子最后字段溢出时整组保持原样、完整几何白名单、公共样式、文字修改、嵌套父级及真实 CLI 回放。
+- 首轮运行 43/44 通过：AI 编写的测试把既有负尺寸错误文字写成了 must be non-negative，实际 Numeric 使用 must not be negative。核对原实现后修正测试预期，重新严格编译及运行，44/44 通过。
+- 独立只读复核检查原子性、白名单、组样式和父级显示，未发现本轮需要修复的问题。
+- 用户未反馈实际运行结果或代码理解情况，本轮学习讨论待其反馈；浏览器样式继承到 SVG 保存阶段再验证。
+
 # 一致性自查
 
-当前实现与三层方案一致，src 下 20 个类各自放在同名文件，另有 CommandToken 只读输入接口。
+当前实现与三层方案一致，src 下 23 个类各自放在同名文件，另有 CommandToken 只读输入接口。
 
 - 抽查 MoveCommand：只依赖 application 与 domain，调用 shape.move，不直接修改几何字段。
 - 抽查六类图形及 SvgDocument：只依赖 domain，没有 Node、终端或文件 IO 依赖。
@@ -149,11 +167,12 @@ box、动态插件框架和图形界面均不列入本期交付。
 - CommandTokenizer 和 Numeric 分别放在 cli 与 domain，是各自职责的辅助类，不增加反向依赖。
 - 容器增量修改 CreateCommand 与文档职责，移动/查询命令沿用原实现；容器能力通过多态提供，没有按 tag 添加分散的判断。
 - CommandToken 是不负责业务行为的只读输入元数据，不是公共数据袋形式的图形模型；application 不反向依赖 cli。
-- Composite 已在移动与遍历中实现；其他编辑操作、历史管理和持久化尚未实现，因此这里只是前四个增量的一致性检查。
+- ScaleCommand 和 SetCommand 调用对象行为，不根据图形类型分派；各类内部的属性白名单判断属于自身校验职责。
+- Composite 已在移动、缩放与遍历中实现；树结构编辑、历史管理和持久化尚未实现，因此这里只是前五个增量的一致性检查。
 
 # 质量保证手段
 
-执行 `npm test`：TypeScript 严格编译通过，Node 内置测试运行器 34/34 通过（第一轮 9 组，第二轮 5 组，第三轮 10 组，第四轮 10 组）。
+执行 `npm test`：TypeScript 严格编译通过，Node 内置测试运行器 44/44 通过（第一轮 9 组，第二轮 5 组，第三轮 10 组，第四轮 10 组，第五轮 10 组）。
 
 | 验证内容 | 结果 |
 | --- | --- |
@@ -178,12 +197,17 @@ box、动态插件框架和图形界面均不列入本期交付。
 | 父容器错误、跨层 id 重复、失败后 id 仍可用 | 通过 |
 | 带引号的 in、名为 in 的容器、只读孩子列表、防循环/重复挂接 | 通过 |
 | 100 层容器嵌套、课设流程图创建与组移动部分的真实 CLI 回放 | 通过 |
+| 嵌套组缩放位置与尺寸，文字内容和描边宽度保持不变 | 通过 |
+| 五种叶子最后几何字段溢出，整组不变；空组因子校验 | 通过 |
+| 各类型几何白名单、六类公共样式、文字属性修改、非法修改不变 | 通过 |
+| 普通组保留自身样式，子元素显式/缺省样式保持；show 直接父级与只读行为 | 通过 |
+| 第五轮真实 CLI 回放、精确错误提示及失败后的属性查询 | 通过 |
 | 交互终端 svg> 提示符和最小命令链 | AI 验证通过 |
 | 用户手动验收与关键代码讨论 | 待用户反馈 |
 
-功能测试文件为 tests/FirstIncrement.test.ts、tests/CircleIncrement.test.ts、tests/LeafShapesIncrement.test.ts、tests/CommandTokenizer.test.ts 与 tests/GroupIncrement.test.ts；回放脚本为 examples/step-01.commands.txt 至 examples/step-04.commands.txt。
+功能测试文件为 tests/FirstIncrement.test.ts、tests/CircleIncrement.test.ts、tests/LeafShapesIncrement.test.ts、tests/CommandTokenizer.test.ts、tests/GroupIncrement.test.ts 与 tests/AttributeIncrement.test.ts；回放脚本为 examples/step-01.commands.txt 至 examples/step-05.commands.txt。
 一组测试可以覆盖多个边界用例；以上表格不表示每行均对应一个独立测试。
 
 本轮分词器的转义语法已明确，但保存/读取尚未实现；反斜杠文本测试不能代替未来真实文件路径验收。
-当前叶子及整组 move 都有失败不变保证；后续其他多对象编辑操作仍需分别验证整条命令的原子性。
+当前叶子及整组 move/scale、单属性 set 都有失败不变保证；后续其他多对象编辑操作仍需分别验证整条命令的原子性。
 用户手动体验与设计讨论独立记录，未实现功能不记为测试通过。

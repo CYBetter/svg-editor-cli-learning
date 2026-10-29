@@ -5,9 +5,9 @@
 
 ## 当前增量
 
-第一轮实现最小矩形编辑流程；第二轮增加圆形；第三轮增加椭圆、线段和文字；第四轮加入 g 容器。
-当前支持六种类型的 create、create ... in、整棵子树的 move / tree、输入校验和失败时保持状态。
-34 组自动测试通过。用户已要求继续推进，尚未反馈具体手动验收结果。
+第一轮实现最小矩形编辑流程；第二轮增加圆形；第三轮增加椭圆、线段和文字；第四轮加入 g 容器；第五轮加入 scale、set、show。
+当前支持六种类型的创建、整棵子树的移动/缩放、属性修改和查询、输入校验和失败时保持状态。
+44 组自动测试通过。用户已要求继续推进，尚未反馈具体手动验收结果。
 其余编辑命令、撤销重做与 SVG 读写留到后续增量。
 
 ## Git 迭代约定
@@ -148,13 +148,48 @@ examples/step-04.commands.txt 包含课设两节点流程图的创建与组移�
 
 ## 本轮阅读路径
 
-1. [GroupShape.ts](src/domain/GroupShape.ts)：容器保存子图形，递归准备移动；子节点数组只暴露冻结快照。
-2. [Shape.ts](src/domain/Shape.ts)：公共 move 入口校验位移，调用受保护的 prepareMove，再同步执行更新。
-3. [SvgDocument.ts](src/domain/SvgDocument.ts)：维护根节点顺序和全局 id 索引，统一处理带父容器的插入。
+1. [SetCommand.ts](src/application/commands/SetCommand.ts)：找到对象，调用 setAttribute；命令不按图形类型判断。
+2. [Shape.ts](src/domain/Shape.ts)：封装公共样式、缩放入口和显示属性；几何修改交给具体子类。
+3. [RectShape.ts](src/domain/RectShape.ts)：白名单内的几何值校验成功才赋值；缩放先检查全部位置与尺寸。
 
-准备阶段只计算和检查，提交回调只赋值；这些回调不公开、不保存，不作为撤销历史。
-[MoveCommand.ts](src/application/commands/MoveCommand.ts) 与 [TreeCommand.ts](src/application/commands/TreeCommand.ts) 继续复用。
-本轮 CreateCommand 增加了父容器参数，领域对象增加树结构能力，因此是一次有依据的架构演进。
+组的 scale 与上一轮 move 一样，先准备全部孩子的变化，再统一提交，避免前面的图形已经改动、后面的图形才报错。
+准备回调不公开、不保存，不作为撤销历史。show 只显示对象自身的显式属性；父级从现有对象树查询。
+
+## 第五轮体验：缩放、属性修改与查询
+
+```text
+init 800 600
+create g node
+create rect box 10 20 100 50 in node
+create text label 25 50 "开始" in node
+set node fill blue
+set box stroke black
+set box stroke-width 2
+scale node 2
+set label text "处理数据 v2"
+show box
+show label
+```
+
+预期查询结果：
+
+```text
+rect#box  parent=g#node
+  x=20 y=40 width=200 height=100
+  stroke=black stroke-width=2
+text#label  parent=g#node
+  x=50 y=100 text="处理数据 v2"
+```
+
+缩放以 SVG 原点为基准，位置与尺寸都乘因子；描边宽度属于样式，不随几何缩放改变。
+普通 g 的 fill 只存于组，孩子保留缺省或自己的显式 fill；以后保存 SVG 时依靠 SVG 样式继承。
+所以 show box 中不出现 fill=blue，这是显示显式属性的约定；浏览器渲染要到保存阶段才验收。
+若再执行 `set box fill red`，子图形显式红色将优先于组的继承颜色。
+
+set 的公共属性为 fill、stroke、stroke-width；几何属性按各类型白名单校验，text 额外支持 text 内容。
+尺寸和描边宽度允许零、拒绝负数；坐标允许负数，所有数值必须有限；普通组只支持公共样式。
+未知属性报 `error: unknown attribute: <attr>`；非正缩放因子报 `error: scale factor must be positive`，失败后保持状态。
+完整回放见 examples/step-05.commands.txt，包含两条预期错误和失败后的 show。
 
 ## 前几轮阅读回顾
 
@@ -181,7 +216,7 @@ examples/step-04.commands.txt 包含课设两节点流程图的创建与组移�
 
 | 后续阶段 | 主要内容 | 完成标志 |
 | --- | --- | --- |
-| 1. 属性与几何编辑 | scale、set、show | 位置与尺寸按课设缩放；白名单和文字修改正确；容器行为明确 |
+| 1. 属性与几何编辑（已实现） | scale、set、show | 44 组测试通过；用户体验与代码讨论待反馈 |
 | 2. 树结构编辑 | 先 delete/front/back，再 group/addto/ungroup | 删除整棵子树；正确排序和迁移；无环、无重复 id、失败不变 |
 | 3. 撤销与辅助命令 | undo/redo、help、canvas | 一条编辑一个撤销单元；新编辑清 redo；查询不入栈；init/canvas 修改后禁用历史 |
 | 4. SVG 持久化 | 先 save，再 read、补 id 与历史边界 | 浏览器可预览；支持范围内读写一致；失败不替换文档或改变历史 |
