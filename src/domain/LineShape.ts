@@ -19,6 +19,7 @@ export class LineShape extends Shape {
   }
 
   override get label(): string { return `line#${this.id}`; }
+  protected override get elementName(): string { return 'line'; }
 
   protected override cloneGeometry(): LineShape {
     return new LineShape(this.id, this.x1, this.y1, this.x2, this.y2);

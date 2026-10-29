@@ -1,10 +1,11 @@
 import { EditorSession } from './application/EditorSession';
 import { CliApp } from './cli/CliApp';
 import { CommandDispatcher } from './cli/CommandDispatcher';
+import { SvgFileStore } from './infrastructure/SvgFileStore';
 
 export class Main {
   static async run(): Promise<void> {
-    await new CliApp(new EditorSession(), new CommandDispatcher()).run();
+    await new CliApp(new EditorSession(new SvgFileStore()), new CommandDispatcher()).run();
   }
 }
 

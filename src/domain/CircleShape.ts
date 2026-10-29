@@ -17,6 +17,7 @@ export class CircleShape extends Shape {
   }
 
   override get label(): string { return `circle#${this.id}`; }
+  protected override get elementName(): string { return 'circle'; }
 
   protected override cloneGeometry(): CircleShape {
     return new CircleShape(this.id, this.cx, this.cy, this.radius);

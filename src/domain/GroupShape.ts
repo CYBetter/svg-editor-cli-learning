@@ -4,6 +4,7 @@ export class GroupShape extends Shape {
   private children: Shape[] = [];
 
   override get label(): string { return `g#${this.id}`; }
+  protected override get elementName(): string { return 'g'; }
   override get isContainer(): boolean { return true; }
 
   protected override cloneGeometry(): GroupShape {

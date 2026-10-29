@@ -5,10 +5,10 @@
 
 ## 当前增量
 
-第一轮实现最小矩形编辑流程；第二轮增加圆形；第三轮增加椭圆、线段和文字；第四轮加入 g 容器；第五轮加入 scale、set、show；第六轮加入 delete、front、back；第七轮加入 group、addto、ungroup；第八轮加入 undo/redo；第九轮加入 help、canvas。
-当前支持六种类型的创建、移动/缩放/删除、同级重排、分组迁移、属性修改和查询，以及全部十类编辑命令的撤销重做、命令帮助和画布尺寸查询/修改。
-86 组自动测试通过。用户已选择分组位置与文档快照方案，尚未反馈具体手动验收结果。
-SVG 读写留到后续增量，下一轮先实现 save。
+第一轮实现最小矩形编辑流程；第二轮增加圆形；第三轮增加椭圆、线段和文字；第四轮加入 g 容器；第五轮加入 scale、set、show；第六轮加入 delete、front、back；第七轮加入 group、addto、ungroup；第八轮加入 undo/redo；第九轮加入 help、canvas；第十轮加入 save。
+当前支持六种类型的创建、移动/缩放/删除、同级重排、分组迁移、属性修改和查询，以及全部十类编辑命令的撤销重做、命令帮助、画布尺寸查询/修改与 SVG 保存。
+98 组自动测试通过；AI 已验证浏览器渲染、样式继承、叠放顺序和特殊字符还原。用户已选择分组位置与文档快照方案，尚未反馈具体手动验收结果。
+已支持显式指定路径保存 SVG；下一轮实现 read 以及保存到读入路径的完整流程。
 
 ## Git 迭代约定
 
@@ -37,7 +37,7 @@ tree
 ```
 
 最后应看到 `rect#r1 x=40 y=30 w=100 h=50`。按 Ctrl+C 退出。
-本轮数据只在内存中保存，重新启动会得到未初始化状态。
+重新启动会得到未初始化状态；第十轮起可用 `save demo.svg` 保存当前图形，read 将在下一轮接入。
 
 再输入两条错误命令，并用 tree 检查矩形保持不变：
 
@@ -310,7 +310,7 @@ tree node
 - undo 后成功执行新编辑会清空 redo。`move box 0 0` 等无实际变化的成功编辑也算一个单元。
 - 成功 init 或 canvas 修改清空历史，并使 undo/redo 都报 `error: undo not allowed after io command`；下一次成功编辑重新解禁。
 - 解禁后没有可撤销/重做内容，分别报 `error: nothing to undo` / `error: nothing to redo`。
-- 第八轮完成 init 边界，第九轮补齐 canvas 边界；read/save 的历史边界留到对应命令加入时验证。
+- 第八轮完成 init 边界，第九轮补齐 canvas 边界，第十轮补齐 save 边界；read 留到下一轮。
 
 完整回放见 examples/step-08.commands.txt，包含三条预期错误及历史分支验证。
 
@@ -351,7 +351,7 @@ canvas 无参查询，单参只改宽并保留当前高度，双参修改宽高�
 其中单参数的行为是本实现的补充约定，任务书没有单独规定。成功修改为文档操作，即使尺寸与原来相同，也清空并禁用历史。
 非法尺寸或复制失败则保持原文档和历史；之后首次成功编辑建立新的可撤销记录，但不能越过画布修改恢复更早的编辑。
 
-help 列出 17 条已实现命令及六类创建语法，将 read/save 明确标为后续功能。
+第九轮 help 列出 17 条已实现命令；第十轮增加 save 后为 18 条，仅 read 标为后续功能。
 按任务书“未 read/init 就执行其他命令”的通用错误约定，help 也要求先 init；启动提示已说明这一顺序。
 完整回放见 examples/step-09.commands.txt，含查询保留 redo、单参保留高度、两条预期错误及失败修改后 redo 仍可用。
 
@@ -363,6 +363,49 @@ help 列出 17 条已实现命令及六类创建语法，将 read/save 明确标
 
 本轮复习重点是“改变状态”和“记录可撤销编辑”不是同一件事：canvas 修改确实改变文档，但课设要求它成为历史边界。
 因此不能让所有成功命令都走 EditCommand，也不能在尺寸验证之前清空历史。help 与 canvas 查询只读，不替换文档。
+
+## 第十轮体验：把对象树保存成 SVG
+
+在 CLI 中输入：
+
+```text
+init 400 200
+create g node
+set node fill #4a90d9
+create rect box 30 70 160 60 in node
+create text label 50 105 "开始 <Start> & 输入" in node
+set label fill white
+save demo.svg
+undo
+```
+
+保存反馈为 `saved to demo.svg (3 elements)`，计数包括 g，不包括 svg 根。
+用浏览器打开 demo.svg，应看到蓝色矩形和白色文字；文件中的文本是 `开始 &lt;Start&gt; &amp; 输入`，浏览器显示原字符。
+最后 undo 按课设报 `error: undo not allowed after io command`。保存不修改图形或替换当前文档，但成功后会清空历史；下一条成功编辑可以重新撤销。
+
+路径约定严格遵循任务书：无参 save 的默认目标是 read 读入时的路径。当前还没有 read，因此 init 后必须给出路径；即使已经显式保存一次，无参 save 仍报 `error: no source file. use save <file.svg>`。
+带空格路径使用双引号，如 `save "我的图形 v1.svg"`；相对路径按启动程序时所在目录解释，父目录须已存在。
+保存可替换已有普通文件；目录或符号链接目标被拒绝。写入失败报 `error: cannot write file: <路径>`，原文件、当前文档和历史保持不变。
+
+完整流程图脚本为 [examples/step-10.commands.txt](examples/step-10.commands.txt)，输出为 [examples/step-10.svg](examples/step-10.svg)。
+AI 已在 Edge 中打开该输出，检查蓝色继承、橙色覆盖、白色文字和连接线，并另行验证 front/back 叠放及 XML 特殊字符/空白的完整还原。
+编译后可在工程根目录用下面的 UTF-8 回放方式运行，避免旧版 PowerShell 管道损坏中文：
+
+```powershell
+node -e "const fs=require('node:fs'),cp=require('node:child_process');const r=cp.spawnSync(process.execPath,['dist/src/Main.js'],{input:fs.readFileSync('examples/step-10.commands.txt'),encoding:'utf8'});process.stdout.write(r.stdout);process.stderr.write(r.stderr);process.exitCode=r.status??1"
+```
+
+脚本最后两条 error 分别验证保存后的历史阻断与缺少读入路径，是预期结果。
+
+## 第十轮阅读路径与取舍
+
+1. [Shape.ts](src/domain/Shape.ts) 的 writeTo：各类提供自身元素名和属性，容器递归输出孩子；TextShape 单独提供文字内容，不把 text 伪属性写成 XML 属性。
+2. [SvgWriter.ts](src/infrastructure/SvgWriter.ts)：实现 DrawingWriter 输出契约，统一处理命名空间、viewBox、缩进和转义，不按图形名称判断类型。
+3. [SvgFileStore.ts](src/infrastructure/SvgFileStore.ts) 与 [EditorSession.ts](src/application/EditorSession.ts)：先生成完整文本，独占创建同目录临时文件，写完关闭后替换目标；成功返回之后会话才清空历史。
+
+本轮复习两个职责：序列化决定“文件里写什么”，文件模块决定“如何可靠写入”。Main 注入 DocumentSaver 的具体实现，命令与领域模型都不依赖 Node 文件 API。
+公共样式只输出显式值，组样式由 SVG 继承；子图形的显式样式优先。对象顺序就是输出顺序，移动/缩放输出实际几何值，不重复写 transform。
+按 [XML 1.0 规范](https://www.w3.org/TR/xml/#charsets) 拒绝不能写入 XML 的控制字符和未配对代理项；合法空白用字符引用保留，中文和 emoji 用 UTF-8 保存。非法文本保存失败也不清历史。
 
 ## 前几轮阅读回顾
 
@@ -394,8 +437,8 @@ help 列出 17 条已实现命令及六类创建语法，将 read/save 明确标
 | 2B. 树结构分组与迁移（已实现） | group、addto、ungroup | 66 组测试通过；采用用户选定的位置规则，失败保持状态 |
 | 3A. 撤销重做（已实现） | undo、redo、init 历史边界 | 78 组测试通过；用户选定快照，一条编辑一个历史单元 |
 | 3B. 辅助命令（已实现） | help、canvas | 86 组测试通过；查询保留历史，成功修改尺寸清历史，失败保留状态 |
-| 4A. SVG 保存（下一轮） | save、SVG 输出与保存历史边界 | 输出六类图形、嵌套与显式样式；正确转义；浏览器可预览；写入失败保留历史 |
-| 4B. SVG 读取 | read、缺失 id 补全、读入路径与历史边界 | 支持范围内读写一致；先明确外部 SVG 处理边界；失败不替换文档或改变历史 |
+| 4A. SVG 保存（已实现） | save、SVG 输出与保存历史边界 | 98 组测试通过；六类输出与转义、失败保留旧文件和历史；浏览器预览通过 |
+| 4B. SVG 读取（下一轮） | read、缺失 id 补全、读入路径与历史边界 | 支持范围内读写一致；明确外部 SVG 处理边界；无参 save 保存到读入路径；失败不替换文档或改变历史 |
 | 5. 最终验收 | 全命令回放、架构检查、文档修订、final tag | 课设示例与边界测试通过，真实过程记录完整，远程代码与 tag 一致 |
 
 详细验收点和待讨论取舍见 doc/README.md 的“后续迭代安排”。box 与动态插件不属于本阶段。

@@ -14,6 +14,12 @@ export class TextShape extends Shape {
   }
 
   override get label(): string { return `text#${this.id}`; }
+  protected override get elementName(): string { return 'text'; }
+  protected override get textContent(): string { return this.content; }
+
+  protected override outputAttributes(): Readonly<Record<string, number>> {
+    return { x: this.x, y: this.y };
+  }
 
   protected override cloneGeometry(): TextShape {
     return new TextShape(this.id, this.x, this.y, this.content);

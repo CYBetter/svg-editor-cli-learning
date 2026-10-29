@@ -1,0 +1,24 @@
+# 第十轮：保存流程图；在工程根目录回放
+init 640 260
+create rect background 0 0 640 260 white
+create text title 24 32 "SVG 保存：模型 & 文件"
+create g flow
+set flow fill #4a90d9
+create g node1 in flow
+create rect start 40 90 160 60 in node1
+create text start-label 65 125 "开始 <Start>" in node1
+set start-label fill white
+create line edge 200 120 360 120 black in flow
+set edge stroke-width 2
+create g node2 in flow
+create rect end 360 90 160 60 #f5a623 in node2
+create text end-label 385 125 "处理 & 输出" in node2
+set end-label fill white
+move node2 20 0
+undo
+redo
+undo
+save examples/step-10.svg
+undo
+# 新建文档没有读入路径，显式保存不会建立默认路径
+save

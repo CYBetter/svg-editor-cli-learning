@@ -1,3 +1,4 @@
+import { DrawingWriter } from './DrawingWriter';
 import { GroupShape } from './GroupShape';
 import { Numeric } from './Numeric';
 import { Shape } from './Shape';
@@ -12,6 +13,11 @@ export class SvgDocument {
   }
 
   get size(): string { return `${this.width}x${this.height}`; }
+  get elementCount(): number { return this.shapes.size; }
+
+  writeTo(writer: DrawingWriter): string {
+    return writer.canvas(this.width, this.height, this.roots.map(root => root.writeTo(writer)));
+  }
 
   clone(): SvgDocument {
     return this.withCanvasSize(this.width, this.height);

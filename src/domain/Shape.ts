@@ -1,3 +1,4 @@
+import { DrawingWriter } from './DrawingWriter';
 import { Numeric } from './Numeric';
 
 export abstract class Shape {
@@ -58,6 +59,21 @@ export abstract class Shape {
   }
 
   protected abstract cloneGeometry(): Shape;
+
+  writeTo(writer: DrawingWriter): string {
+    return writer.element(
+      this.elementName,
+      { id: this.id, ...this.outputAttributes(), ...Object.fromEntries(this.styles) },
+      this.getChildren().map(child => child.writeTo(writer)),
+      this.textContent,
+    );
+  }
+
+  protected abstract get elementName(): string;
+  protected get textContent(): string | undefined { return undefined; }
+  protected outputAttributes(): Readonly<Record<string, number | string>> {
+    return this.geometryAttributes();
+  }
 
   move(dx: number, dy: number): void {
     Numeric.finite(dx, 'dx');

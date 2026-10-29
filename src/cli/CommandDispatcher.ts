@@ -12,6 +12,7 @@ import { InitCommand } from '../application/commands/InitCommand';
 import { MoveCommand } from '../application/commands/MoveCommand';
 import { RedoCommand } from '../application/commands/RedoCommand';
 import { ScaleCommand } from '../application/commands/ScaleCommand';
+import { SaveCommand } from '../application/commands/SaveCommand';
 import { SetCommand } from '../application/commands/SetCommand';
 import { ShowCommand } from '../application/commands/ShowCommand';
 import { TreeCommand } from '../application/commands/TreeCommand';
@@ -28,7 +29,7 @@ export class CommandDispatcher {
     ['delete', DeleteCommand], ['front', FrontCommand], ['back', BackCommand],
     ['group', GroupCommand], ['addto', AddToCommand], ['ungroup', UngroupCommand],
     ['undo', UndoCommand], ['redo', RedoCommand],
-    ['help', HelpCommand], ['canvas', CanvasCommand],
+    ['help', HelpCommand], ['canvas', CanvasCommand], ['save', SaveCommand],
   ]);
 
   parse(line: string): Command | undefined {

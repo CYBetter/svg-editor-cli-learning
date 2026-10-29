@@ -19,6 +19,7 @@ export class EllipseShape extends Shape {
   }
 
   override get label(): string { return `ellipse#${this.id}`; }
+  protected override get elementName(): string { return 'ellipse'; }
 
   protected override cloneGeometry(): EllipseShape {
     return new EllipseShape(this.id, this.cx, this.cy, this.rx, this.ry);

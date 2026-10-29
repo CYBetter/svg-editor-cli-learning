@@ -1,11 +1,25 @@
 import { SvgDocument } from '../domain/SvgDocument';
 import { HistoryEntry } from './HistoryEntry';
+import { DocumentSaver } from './DocumentSaver';
 
 export class EditorSession {
   private currentDocument?: SvgDocument;
   private undoStack: HistoryEntry[] = [];
   private redoStack: HistoryEntry[] = [];
   private historyBlocked = true;
+
+  constructor(private readonly saver?: DocumentSaver) {}
+
+  save(filePath?: string): string {
+    const document = this.document;
+    // 课设默认路径来自 read；当前仅有 init 文档，不把另存路径当成读入路径。
+    if (filePath === undefined) throw new Error('no source file. use save <file.svg>');
+    if (!this.saver) throw new Error('saving is not configured');
+    const result = `saved to ${filePath} (${document.elementCount} elements)`;
+    this.saver.save(document, filePath);
+    this.clearHistory();
+    return result;
+  }
 
   initialize(width: number, height: number): SvgDocument {
     // 构造完成才替换，非法 init 不丢失旧文档。
@@ -19,10 +33,14 @@ export class EditorSession {
   private replaceDocument(document: SvgDocument): SvgDocument {
     // 文档操作成功后才清历史；init 和 canvas 修改共用同一边界。
     this.currentDocument = document;
+    this.clearHistory();
+    return document;
+  }
+
+  private clearHistory(): void {
     this.undoStack = [];
     this.redoStack = [];
     this.historyBlocked = true;
-    return document;
   }
 
   edit(operation: (document: SvgDocument) => string): string {

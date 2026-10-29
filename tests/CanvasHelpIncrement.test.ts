@@ -14,13 +14,13 @@ function editor(): { session: EditorSession; run: (line: string) => string | und
   return { session, run: line => dispatcher.parse(line)?.execute(session) };
 }
 
-test('help 列出当前命令、六类创建语法和关键约定，读写明确标记为后续功能', () => {
+test('help 列出当前命令、六类创建语法和关键约定，读取明确标记为后续功能', () => {
   const { run } = editor();
   run('init');
   const help = run('help')!;
   const [available, planned] = help.split('后续增量（当前尚未实现）：');
   const names = new Set(available.split('\n').filter(line => line.startsWith('  ')).map(line => line.trim().split(' ')[0]));
-  assert.deepEqual([...names].sort(), ['init', 'canvas', 'create', 'delete', 'move', 'scale', 'set', 'group', 'addto', 'ungroup', 'front', 'back', 'tree', 'show', 'help', 'undo', 'redo'].sort());
+  assert.deepEqual([...names].sort(), ['init', 'canvas', 'save', 'create', 'delete', 'move', 'scale', 'set', 'group', 'addto', 'ungroup', 'front', 'back', 'tree', 'show', 'help', 'undo', 'redo'].sort());
   for (const type of ['rect', 'circle', 'ellipse', 'line', 'text', 'g']) {
     const syntax = available.split('\n').find(line => line.startsWith(`  create ${type} `));
     assert.ok(syntax?.includes('<id>'));
@@ -31,8 +31,9 @@ test('help 列出当前命令、六类创建语法和关键约定，读写明确
   assert.ok(available.includes('最近共同父容器'));
   assert.ok(available.includes('禁止解散根级容器'));
   assert.ok(planned.includes('read <file.svg>'));
-  assert.ok(planned.includes('save [file.svg]'));
-  assert.throws(() => run('save demo.svg'), { message: 'unknown command: save' });
+  assert.ok(available.includes('save [file.svg]'));
+  assert.ok(!planned.includes('save [file.svg]'));
+  assert.throws(() => run('read demo.svg'), { message: 'unknown command: read' });
 });
 
 test('help/canvas 按课设要求先初始化，非法参数不改变已建立的文档', () => {

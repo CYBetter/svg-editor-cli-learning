@@ -15,6 +15,7 @@ export class HelpCommand extends Command {
       '文档：',
       '  init [w] [h]                   新建画布；默认 800x600',
       '  canvas [w] [h]                 无参查询；单参改宽保留高；双参改宽高',
+      '  save [file.svg]                保存 SVG；init 后须给路径；read 接入后无参保存到读入路径',
       '创建（in 可省略，省略时位于画布根）：',
       '  create rect <id> <x> <y> <w> <h> [fill] [in <containerId>]',
       '  create circle <id> <cx> <cy> <r> [fill] [in <containerId>]',
@@ -40,10 +41,9 @@ export class HelpCommand extends Command {
       '  undo                           撤销上一次编辑',
       '  redo                           重做；撤销后新编辑清空重做记录',
       '规则：先 init 再使用其他命令；带空格参数用双引号；# 开头整行是注释。',
-      '成功 init 或 canvas 修改会清空并禁用历史，直到下一次成功编辑。',
+      '成功 init、save 或 canvas 修改会清空并禁用历史，直到下一次成功编辑。',
       '后续增量（当前尚未实现）：',
       '  read <file.svg>                读取 SVG',
-      '  save [file.svg]                保存 SVG',
     ].join('\n');
   }
 }

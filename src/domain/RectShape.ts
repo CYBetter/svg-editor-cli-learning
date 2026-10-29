@@ -19,6 +19,7 @@ export class RectShape extends Shape {
   }
 
   override get label(): string { return `rect#${this.id}`; }
+  protected override get elementName(): string { return 'rect'; }
 
   protected override cloneGeometry(): RectShape {
     return new RectShape(this.id, this.x, this.y, this.width, this.height);

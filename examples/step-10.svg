@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="260" viewBox="0 0 640 260">
+  <rect id="background" x="0" y="0" width="640" height="260" fill="white"/>
+  <text id="title" x="24" y="32">SVG 保存：模型 &amp; 文件</text>
+  <g id="flow" fill="#4a90d9">
+    <g id="node1">
+      <rect id="start" x="40" y="90" width="160" height="60"/>
+      <text id="start-label" x="65" y="125" fill="white">开始 &lt;Start&gt;</text>
+    </g>
+    <line id="edge" x1="200" y1="120" x2="360" y2="120" stroke="black" stroke-width="2"/>
+    <g id="node2">
+      <rect id="end" x="360" y="90" width="160" height="60" fill="#f5a623"/>
+      <text id="end-label" x="385" y="125" fill="white">处理 &amp; 输出</text>
+    </g>
+  </g>
+</svg>
