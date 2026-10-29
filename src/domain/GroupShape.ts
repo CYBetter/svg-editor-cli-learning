@@ -24,6 +24,25 @@ export class GroupShape extends Shape {
     this.children.push(shape);
   }
 
+  override removeChild(shape: Shape): void {
+    const index = this.childIndex(shape);
+    shape.markDetached();
+    this.children.splice(index, 1);
+  }
+
+  override reorderChild(shape: Shape, toFront: boolean): void {
+    const index = this.childIndex(shape);
+    this.children.splice(index, 1);
+    if (toFront) this.children.push(shape);
+    else this.children.unshift(shape);
+  }
+
+  private childIndex(shape: Shape): number {
+    const index = this.children.indexOf(shape);
+    if (index < 0) throw new Error(`not a direct child: ${shape.id}`);
+    return index;
+  }
+
   protected override prepareMove(dx: number, dy: number): () => void {
     // 所有子树准备成功后，才执行其中任何一个更新。
     const updates = this.children.map(child => GroupShape.prepareChildMove(child, dx, dy));

@@ -1,0 +1,18 @@
+# 第六轮：同级前后顺序、删除子树、释放全部 id
+init 800 600
+create g scene
+create rect red 10 20 100 60 red in scene
+create rect blue 40 40 100 60 blue in scene
+create g node in scene
+create rect box 200 20 100 60 in node
+create text label 210 55 "开始" in node
+front red
+tree scene
+back red
+tree scene
+delete node
+# 已删除的后代无法查询；失败后还可以继续编辑
+show label
+create circle label 300 50 20 green in scene
+show label
+tree

@@ -5,9 +5,9 @@
 
 ## 当前增量
 
-第一轮实现最小矩形编辑流程；第二轮增加圆形；第三轮增加椭圆、线段和文字；第四轮加入 g 容器；第五轮加入 scale、set、show。
-当前支持六种类型的创建、整棵子树的移动/缩放、属性修改和查询、输入校验和失败时保持状态。
-44 组自动测试通过。用户已要求继续推进，尚未反馈具体手动验收结果。
+第一轮实现最小矩形编辑流程；第二轮增加圆形；第三轮增加椭圆、线段和文字；第四轮加入 g 容器；第五轮加入 scale、set、show；第六轮加入 delete、front、back。
+当前支持六种类型的创建、整棵子树的移动/缩放/删除、同级重排、属性修改和查询、输入校验和失败时保持状态。
+54 组自动测试通过。用户已要求继续推进，尚未反馈具体手动验收结果。
 其余编辑命令、撤销重做与 SVG 读写留到后续增量。
 
 ## Git 迭代约定
@@ -146,7 +146,7 @@ g#node
 `in` 尾缀只识别未加引号的关键字，`create text t 0 0 "in" in node` 的文字不会被当成语法。
 examples/step-04.commands.txt 包含课设两节点流程图的创建与组移动部分；尚未包含 undo/set/save。
 
-## 本轮阅读路径
+## 第五轮阅读路径
 
 1. [SetCommand.ts](src/application/commands/SetCommand.ts)：找到对象，调用 setAttribute；命令不按图形类型判断。
 2. [Shape.ts](src/domain/Shape.ts)：封装公共样式、缩放入口和显示属性；几何修改交给具体子类。
@@ -191,6 +191,52 @@ set 的公共属性为 fill、stroke、stroke-width；几何属性按各类型�
 未知属性报 `error: unknown attribute: <attr>`；非正缩放因子报 `error: scale factor must be positive`，失败后保持状态。
 完整回放见 examples/step-05.commands.txt，包含两条预期错误和失败后的 show。
 
+## 第六轮体验：同级顺序与删除子树
+
+```text
+init
+create g scene
+create rect red 10 20 100 60 red in scene
+create rect blue 40 40 100 60 blue in scene
+front red
+tree scene
+```
+
+预期顺序如下：red 排在最后，将来保存 SVG 后会后绘制、显示在 blue 上面。
+
+```text
+g#scene
+├── rect#blue x=40 y=40 w=100 h=60 fill=blue
+└── rect#red x=10 y=20 w=100 h=60 fill=red
+```
+
+执行 `back red` 会恢复 red、blue 的顺序。front/back 只改变同级顺序，父级、坐标、样式和组内顺序均不变。
+该映射依据 [SVG 默认绘制顺序](https://www.w3.org/TR/SVG2/render.html#RenderingOrder)：后面的元素绘制在前面的元素之上。
+本轮用 tree 验证对象顺序，浏览器重叠效果到保存阶段再验收。
+
+再继续输入：
+
+```text
+delete scene
+tree
+show red
+create circle red 100 100 20
+```
+
+tree 应只剩 `svg (800x600)`；show red 报 `error: no such shape: red`，随后同名圆形可以创建成功。
+这说明删除既摘除了子树，也清理了全部后代的 ID 索引。
+完整回放见 examples/step-06.commands.txt，包含一条预期错误、同级排序和后代 ID 复用。
+
+## 本轮阅读路径
+
+1. [DeleteCommand.ts](src/application/commands/DeleteCommand.ts)：发起删除并返回摘要，不判断目标是叶子还是容器。
+2. [SvgDocument.ts](src/domain/SvgDocument.ts)：remove 先定位父级并收集子树，再摘离和清理索引；reorder 只调整同级顺序。
+3. [GroupShape.ts](src/domain/GroupShape.ts)：封装孩子列表的摘离与重排；先验证对象是直接孩子，防止 indexOf 返回 -1 时误删末尾。
+
+理解时重点区分两种数据：对象树负责“归属与顺序”，ID 索引负责“按名字找到对象”。
+删除必须更新二者；重排只改变顺序，不删除或重新登记 ID。
+摘离只解除子树根的 attached 标记，后代仍属于子树。领域测试验证可完整重新加入，但当前 CLI 尚未提供 undo。
+
 ## 前几轮阅读回顾
 
 1. [LineShape.ts](src/domain/LineShape.ts)：一次移动要更新两个端点，先检查四个新坐标，再一起赋值。
@@ -217,7 +263,8 @@ set 的公共属性为 fill、stroke、stroke-width；几何属性按各类型�
 | 后续阶段 | 主要内容 | 完成标志 |
 | --- | --- | --- |
 | 1. 属性与几何编辑（已实现） | scale、set、show | 44 组测试通过；用户体验与代码讨论待反馈 |
-| 2. 树结构编辑 | 先 delete/front/back，再 group/addto/ungroup | 删除整棵子树；正确排序和迁移；无环、无重复 id、失败不变 |
+| 2A. 树结构删除与排序（已实现） | delete、front、back | 54 组测试通过；删除释放全部后代 ID，排序仅影响同级 |
+| 2B. 树结构分组与迁移（下一轮） | group、addto、ungroup | 正确迁移与保序；无环、无重复 id、失败不变 |
 | 3. 撤销与辅助命令 | undo/redo、help、canvas | 一条编辑一个撤销单元；新编辑清 redo；查询不入栈；init/canvas 修改后禁用历史 |
 | 4. SVG 持久化 | 先 save，再 read、补 id 与历史边界 | 浏览器可预览；支持范围内读写一致；失败不替换文档或改变历史 |
 | 5. 最终验收 | 全命令回放、架构检查、文档修订、final tag | 课设示例与边界测试通过，真实过程记录完整，远程代码与 tag 一致 |

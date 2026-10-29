@@ -18,10 +18,26 @@ export abstract class Shape {
     this.attached = true;
   }
 
+  /** 树结构内部接口：只解除子树根的归属，后代仍属于该子树。 */
+  markDetached(): void {
+    if (!this.attached) throw new Error(`shape is not attached: ${this.id}`);
+    this.attached = false;
+  }
+
   getChildren(): readonly Shape[] { return Object.freeze([]); }
 
   /** 树结构内部接口；编辑命令应通过 SvgDocument 插入。 */
   appendChild(_shape: Shape): void {
+    throw new Error(`not a container: ${this.id}`);
+  }
+
+  /** 树结构内部接口；编辑命令应通过 SvgDocument 删除。 */
+  removeChild(_shape: Shape): void {
+    throw new Error(`not a container: ${this.id}`);
+  }
+
+  /** 同级重排内部接口；不改变对象的归属或几何值。 */
+  reorderChild(_shape: Shape, _toFront: boolean): void {
     throw new Error(`not a container: ${this.id}`);
   }
 

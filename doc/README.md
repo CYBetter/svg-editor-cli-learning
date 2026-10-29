@@ -4,7 +4,7 @@
 
 第一轮实现 init、create rect、tree（含 tree id）、move；第二轮增加 circle；第三轮增加 ellipse、line、text。
 第四轮增加 g 容器、create ... in、嵌套 tree 和整组 move；第五轮增加 scale、set、show。
-后续继续树结构编辑、撤销重做和文件读写。
+第六轮增加 delete、front、back；后续继续分组与迁移、撤销重做和文件读写。
 当前不是完整的 Phase 1 提交版本；不创建 final tag。
 
 ## 模块职责与依赖
@@ -34,21 +34,22 @@ application --> domain
 
 ## 设计模式
 
-- Command（任务书要求）：InitCommand、CreateCommand、MoveCommand、TreeCommand、ScaleCommand、SetCommand、ShowCommand 实现相同 execute 契约。CLI 统一执行命令，不包揽业务。
+- Command（任务书要求）：InitCommand、CreateCommand、MoveCommand、TreeCommand、ScaleCommand、SetCommand、ShowCommand、DeleteCommand、FrontCommand、BackCommand 实现相同 execute 契约。CLI 统一执行命令，不包揽业务。
 - 多态与封装：Shape 定义行为，RectShape/CircleShape/EllipseShape/LineShape/TextShape 各自实现几何变化；文档保存 Shape，MoveCommand 不判断图形类型。
-- Composite：GroupShape 与叶子均为 Shape；组递归准备孩子的移动/缩放，tree 通过统一的 getChildren 遍历。普通 g 的 set 只改变自身样式，不向孩子复制；delete 待后续实现。
+- Composite：GroupShape 与叶子均为 Shape；组递归准备孩子的移动/缩放，tree 通过统一的 getChildren 遍历。普通 g 的 set 只改变自身样式，不向孩子复制；delete 通过 Shape.walk 收集整棵子树，命令不判断图形类型。
 - 移动与缩放的准备与提交：Shape.move/scale 先校验参数，再调用受保护的 prepareMove/prepareScale。叶子计算新几何值，组汇总孩子的更新；全部准备成功才同步执行只赋值的回调。回调不保存为历史，不把此机制表述为所有编辑命令的通用事务。
 - 属性封装：Shape 私有样式集合统一管理 fill/stroke/stroke-width；各子类通过 setGeometryAttribute 校验自身白名单。单属性先校验再赋值；geometryAttributes 返回展示用快照，字段仍是私有状态。
+- 树与索引一致性：删除由 SvgDocument 先定位父级、收集子树，再从父级摘离并清理所有后代 ID；重排只改同级列表。可能失败的查找与归属检查在修改之前完成。
 - 仅两处名称分派：CommandDispatcher（命令名 → 命令类）与 ShapeFactory（类型名 → 图形类）。两处均标注待重构为注册入口；本轮不制作动态插件框架。
 
 ## 变化点假设与取舍
 
 1. 新增图形：保留 Shape 行为契约和集中工厂；按增量增加具体类。
 2. 新增命令或撤销：命令对象保留操作意图；历史策略在后续比较逆操作与快照后确定。
-3. 图形嵌套：文档维护根节点顺序及全局 id 索引；GroupShape 管理私有孩子。后续迁移和删除需同步维护树与索引，并扩展父级管理。
+3. 图形嵌套：文档维护根节点顺序及全局 id 索引；GroupShape 管理私有孩子。删除同步维护树与索引；后续迁移要继续保证归属、无环和顺序。
 4. 终端以外的入口：命令和领域对象不依赖终端，可以复用。
 5. 文件读写：届时新增基础设施模块，当前不提前创建空接口。
-6. 父级查询：show 暂时扫描树的直接孩子找到父级，复杂度 O(N)，避免提前维护额外父级索引。后续树迁移阶段结合变更操作重新评估。
+6. 父级查询：show、删除与重排共用 findParent，扫描根节点和各容器的直接孩子，复杂度 O(N)。本轮继续避免额外父级索引；后续多对象迁移时再评估这一取舍。
 
 ## 本轮具体约定
 
@@ -65,7 +66,10 @@ application --> domain
 - 双引号分组是任务书要求；引号前的反斜杠奇偶转义为本实现约定：2n 个反斜杠产生 n 个并切换引号状态，2n+1 个产生 n 个及字面引号。其他位置反斜杠原样保留。
 - create 尾缀只识别末尾未加引号的 in 和其目标；quoted 元数据通过 CommandToken 传递，避免把文字内容误当成语法。
 - 根元素由 SvgDocument 表示，没有伪造可被用户寻址的 g 根节点。
-- appendChild/markAttached 是树结构内部接口，只允许文档插入流程使用；编辑命令不可绕过文档直接修改层级。它们检查重复挂接、自包含，子节点视图是冻结快照。
+- appendChild/removeChild/reorderChild 与 markAttached/markDetached 是树结构内部接口，已有文档的编辑统一由 SvgDocument 组织。它们以对象身份检查归属，不按同名对象替代；子节点视图是冻结快照。
+- delete 释放目标及全部后代的 ID，不删除父级或其他分支；移除后允许复用这些 ID。摘离子树根后内部孩子关系保留，只有根的 attached 变为 false。attached 表示已有直接归属，不等价于仍在某个文档的索引中。
+- front 为同级数组末尾，back 为开头，其他兄弟相对顺序保持；依据 [SVG 绘制顺序](https://www.w3.org/TR/SVG2/render.html#RenderingOrder)，后绘制的元素显示在上面。已在目标位置或只有一个孩子时重复操作仍成功且不重复节点。
+- 删除返回摘离的对象，便于摘要输出与领域验证；尚不保存原父级和位置为历史，因此本轮没有实现 undo。浏览器绘制效果也尚未验收。
 
 ## Git 记录规则
 
@@ -81,7 +85,7 @@ application --> domain
 | 阶段 | 实现范围 | 验收重点 | 学习与设计讨论 |
 | --- | --- | --- | --- |
 | 属性与几何编辑（已实现） | scale、set、show | 第五轮新增 10 组测试通过；用户手动反馈待补充 | 几何与样式的区别；普通 g 样式保留继承语义，不能照搬未来 box 的传播规则 |
-| 树结构编辑 A | delete、front、back | 删除容器包含全部后代并释放 id；调整顺序仅限同级；tree 正确反映结果 | 对象树与索引如何一起保持一致；数组顺序与 SVG 绘制顺序的关系 |
+| 树结构编辑 A（已实现） | delete、front、back | 第六轮新增 10 组测试通过；删除释放后代 id，重排保持父级与内部顺序；用户体验待反馈 | 对象树与索引如何一起保持一致；数组顺序与 SVG 绘制顺序的关系 |
 | 树结构编辑 B | group、addto、ungroup | 防祖先/后代成环；分组保序；addto 放最后；解组原位提升；按题意拒绝解散根级 g；失败不变 | 先讨论跨父级分组放置与顺序（题目未完全定义），再写入设计约定 |
 | 撤销与辅助命令 | undo、redo；help、canvas | 一条编辑一个单元；撤销后新编辑清 redo；失败/查询不破坏历史；init 与 canvas 修改后禁用历史 | 对比逆操作和快照，选择能正确恢复几何、文本、树和顺序的方案；先提供建议再讨论取舍 |
 | SVG 保存 | save、默认路径规则、IO 历史边界 | 正确命名空间与文本转义；省略未指定样式；保存失败不清历史；成功保存后禁用 undo/redo；浏览器预览 | 模型与 XML/文件 IO 的职责分离；首次无路径保存与默认路径约定 |
@@ -157,9 +161,19 @@ box、动态插件框架和图形界面均不列入本期交付。
 - 独立只读复核检查原子性、白名单、组样式和父级显示，未发现本轮需要修复的问题。
 - 用户未反馈实际运行结果或代码理解情况，本轮学习讨论待其反馈；浏览器样式继承到 SVG 保存阶段再验证。
 
+## 2026-10-29：删除子树与同级重排
+
+- 用户要求“继续推进”，本轮按计划只加入 delete、front、back，未提前实现分组迁移、历史或读写。
+- 先核对任务书的整组删除、同级 z-order 和失败不变规则；参照 SVG 规范明确 front 对应列表末尾、back 对应开头，并写入使用说明。
+- 新增三个命令对象；SvgDocument 统一组织删除与重排，复用父级查找；GroupShape 通过封装方法调整私有孩子列表，没有增加按图形类型的分支。
+- 删除先定位与收集，再摘下子树并清理所有后代 ID。只解除子树根的归属标记，子树内部结构保留；领域测试覆盖整体重新加入及冲突失败，但这还不是 undo 功能。
+- 新增 10 组测试，覆盖五类叶子的根级/嵌套删除、全部后代 ID 释放、子树归属、根级/嵌套重排、重复边界操作、失败不变和真实 CLI 回放；首次严格编译与运行共 54/54 通过。
+- 独立只读复核检查实现及新测试，未发现本轮需要修复的实际缺陷或重要测试漏项；复核未重复运行全量测试。
+- 用户尚未提供本轮手动验收或代码理解反馈，不将继续推进记作已经掌握；本轮重点供其复习对象树、索引与列表顺序的职责。
+
 # 一致性自查
 
-当前实现与三层方案一致，src 下 23 个类各自放在同名文件，另有 CommandToken 只读输入接口。
+当前实现与三层方案一致，src 下 26 个类各自放在同名文件，另有 CommandToken 只读输入接口。
 
 - 抽查 MoveCommand：只依赖 application 与 domain，调用 shape.move，不直接修改几何字段。
 - 抽查六类图形及 SvgDocument：只依赖 domain，没有 Node、终端或文件 IO 依赖。
@@ -168,11 +182,12 @@ box、动态插件框架和图形界面均不列入本期交付。
 - 容器增量修改 CreateCommand 与文档职责，移动/查询命令沿用原实现；容器能力通过多态提供，没有按 tag 添加分散的判断。
 - CommandToken 是不负责业务行为的只读输入元数据，不是公共数据袋形式的图形模型；application 不反向依赖 cli。
 - ScaleCommand 和 SetCommand 调用对象行为，不根据图形类型分派；各类内部的属性白名单判断属于自身校验职责。
-- Composite 已在移动、缩放与遍历中实现；树结构编辑、历史管理和持久化尚未实现，因此这里只是前五个增量的一致性检查。
+- DeleteCommand、FrontCommand、BackCommand 只调用文档行为；叶子类无需改动。根级与容器内的列表存放位置不同，分支依据是父级位置，不是图形类型名称。
+- Composite 已在移动、缩放、删除与遍历中实现；分组迁移、历史管理和持久化尚未实现，因此这里只是前六个增量的一致性检查。
 
 # 质量保证手段
 
-执行 `npm test`：TypeScript 严格编译通过，Node 内置测试运行器 44/44 通过（第一轮 9 组，第二轮 5 组，第三轮 10 组，第四轮 10 组，第五轮 10 组）。
+执行 `npm test`：TypeScript 严格编译通过，Node 内置测试运行器 54/54 通过（第一轮 9 组，第二轮 5 组，第三轮 10 组，第四轮 10 组，第五轮 10 组，第六轮 10 组）。
 
 | 验证内容 | 结果 |
 | --- | --- |
@@ -202,12 +217,18 @@ box、动态插件框架和图形界面均不列入本期交付。
 | 各类型几何白名单、六类公共样式、文字属性修改、非法修改不变 | 通过 |
 | 普通组保留自身样式，子元素显式/缺省样式保持；show 直接父级与只读行为 | 通过 |
 | 第五轮真实 CLI 回放、精确错误提示及失败后的属性查询 | 通过 |
+| 五类叶子的根级/嵌套删除、嵌套子树全部 ID 释放与复用 | 通过 |
+| 摘离子树内部归属保留、整体重新加入、冲突失败不变 | 通过 |
+| 根级/嵌套 front/back，保留兄弟相对顺序、父级、属性和内部子树 | 通过 |
+| 单节点/目标位置重复重排、空组删除、全部删除后的空文档 | 通过 |
+| 内部操作拒绝非直接孩子与同名不同对象，旧孩子快照保持只读 | 通过 |
+| 重排与删除组合、错误后状态不变、第六轮真实 CLI 回放 | 通过 |
 | 交互终端 svg> 提示符和最小命令链 | AI 验证通过 |
 | 用户手动验收与关键代码讨论 | 待用户反馈 |
 
-功能测试文件为 tests/FirstIncrement.test.ts、tests/CircleIncrement.test.ts、tests/LeafShapesIncrement.test.ts、tests/CommandTokenizer.test.ts、tests/GroupIncrement.test.ts 与 tests/AttributeIncrement.test.ts；回放脚本为 examples/step-01.commands.txt 至 examples/step-05.commands.txt。
+功能测试文件为 tests/FirstIncrement.test.ts、tests/CircleIncrement.test.ts、tests/LeafShapesIncrement.test.ts、tests/CommandTokenizer.test.ts、tests/GroupIncrement.test.ts、tests/AttributeIncrement.test.ts 与 tests/TreeEditingIncrement.test.ts；回放脚本为 examples/step-01.commands.txt 至 examples/step-06.commands.txt。
 一组测试可以覆盖多个边界用例；以上表格不表示每行均对应一个独立测试。
 
 本轮分词器的转义语法已明确，但保存/读取尚未实现；反斜杠文本测试不能代替未来真实文件路径验收。
-当前叶子及整组 move/scale、单属性 set 都有失败不变保证；后续其他多对象编辑操作仍需分别验证整条命令的原子性。
+当前叶子及整组 move/scale、单属性 set、delete/front/back 都有失败不变保证；后续 group/addto/ungroup 仍需分别验证整条命令的原子性。
 用户手动体验与设计讨论独立记录，未实现功能不记为测试通过。

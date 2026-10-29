@@ -1,6 +1,9 @@
 import { Command } from '../application/commands/Command';
 import { CommandToken } from '../application/CommandToken';
+import { BackCommand } from '../application/commands/BackCommand';
 import { CreateCommand } from '../application/commands/CreateCommand';
+import { DeleteCommand } from '../application/commands/DeleteCommand';
+import { FrontCommand } from '../application/commands/FrontCommand';
 import { InitCommand } from '../application/commands/InitCommand';
 import { MoveCommand } from '../application/commands/MoveCommand';
 import { ScaleCommand } from '../application/commands/ScaleCommand';
@@ -15,6 +18,7 @@ export class CommandDispatcher {
   private readonly commands = new Map<string, new (args: readonly string[], tokens?: readonly CommandToken[]) => Command>([
     ['init', InitCommand], ['create', CreateCommand], ['move', MoveCommand], ['tree', TreeCommand],
     ['scale', ScaleCommand], ['set', SetCommand], ['show', ShowCommand],
+    ['delete', DeleteCommand], ['front', FrontCommand], ['back', BackCommand],
   ]);
 
   parse(line: string): Command | undefined {
