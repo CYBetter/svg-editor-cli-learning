@@ -1,0 +1,14 @@
+# 第十一轮：课设 other.svg 导入，补 ID，再保存并读回
+read examples/other.svg
+tree
+undo
+move c1 20 10
+undo
+read examples/missing-file.svg
+redo
+save examples/step-11.svg
+read examples/step-11.svg
+set t1 text "读回 & 编辑 <SVG>"
+# 无参保存到最近读入的 step-11.svg，不修改 other.svg
+save
+tree

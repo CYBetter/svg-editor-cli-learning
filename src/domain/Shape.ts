@@ -75,6 +75,26 @@ export abstract class Shape {
     return this.geometryAttributes();
   }
 
+  /** @internal 只供工厂恢复新建、未挂接的导入对象；失败对象直接丢弃。 */
+  restoreSvg(attributes: ReadonlyMap<string, string>, content: string): void {
+    if (this.isAttached) throw new Error(`cannot restore attached shape: ${this.id}`);
+    for (const name of Object.keys(this.outputAttributes())) {
+      if (!attributes.has(name)) throw new Error(`missing attribute: ${name} in <${this.elementName}>`);
+    }
+    for (const [name, value] of attributes) {
+      if (name === 'id') continue; // ID 已由导入流程校验/补全，不能覆盖构造时的 ID。
+      if (name === 'text') throw new Error('unknown attribute: text');
+      const normalized = name === 'fill' || name === 'stroke'
+        ? value : value.replace(/^[ \t\r\n]+|[ \t\r\n]+$/g, '');
+      this.setAttribute(name, normalized);
+    }
+    this.restoreText(content);
+  }
+
+  protected restoreText(content: string): void {
+    if (/[^ \t\r\n]/.test(content)) throw new Error(`unexpected text in <${this.elementName}>`);
+  }
+
   move(dx: number, dy: number): void {
     Numeric.finite(dx, 'dx');
     Numeric.finite(dy, 'dy');

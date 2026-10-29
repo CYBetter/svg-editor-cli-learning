@@ -5,7 +5,8 @@ import { SvgFileStore } from './infrastructure/SvgFileStore';
 
 export class Main {
   static async run(): Promise<void> {
-    await new CliApp(new EditorSession(new SvgFileStore()), new CommandDispatcher()).run();
+    const files = new SvgFileStore();
+    await new CliApp(new EditorSession(files, files), new CommandDispatcher()).run();
   }
 }
 

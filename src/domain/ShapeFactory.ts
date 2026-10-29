@@ -9,12 +9,25 @@ import { TextShape } from './TextShape';
 
 export class ShapeFactory {
   create(type: string, id: string, params: readonly string[]): Shape {
+    return this.createShape(type, id, params);
+  }
+
+  createFromSvg(type: string, id: string, attributes: ReadonlyMap<string, string>, content: string): Shape {
+    const shape = this.createShape(type, id);
+    shape.restoreSvg(attributes, content);
+    return shape;
+  }
+
+  private createShape(type: string, id: string, params?: readonly string[]): Shape {
     // 唯一图形名称分派入口；待重构：后续改为类型注册。
+    // undefined 只用于导入的临时零几何对象；CLI 的空参数数组仍按原规则报错。
     if (type === 'g') {
+      params ??= [];
       if (params.length !== 0) throw new Error('usage: create g <id>');
       return new GroupShape(id);
     }
     if (type === 'rect') {
+      params ??= ['0', '0', '0', '0'];
       if (params.length < 4 || params.length > 5) {
         throw new Error('usage: create rect <id> <x> <y> <w> <h> [fill]');
       }
@@ -24,6 +37,7 @@ export class ShapeFactory {
         params[4]);
     }
     if (type === 'circle') {
+      params ??= ['0', '0', '0'];
       if (params.length < 3 || params.length > 4) {
         throw new Error('usage: create circle <id> <cx> <cy> <r> [fill]');
       }
@@ -32,6 +46,7 @@ export class ShapeFactory {
         Numeric.parse(params[2], 'r'), params[3]);
     }
     if (type === 'ellipse') {
+      params ??= ['0', '0', '0', '0'];
       if (params.length < 4 || params.length > 5) {
         throw new Error('usage: create ellipse <id> <cx> <cy> <rx> <ry> [fill]');
       }
@@ -40,6 +55,7 @@ export class ShapeFactory {
         Numeric.parse(params[2], 'rx'), Numeric.parse(params[3], 'ry'), params[4]);
     }
     if (type === 'line') {
+      params ??= ['0', '0', '0', '0'];
       if (params.length < 4 || params.length > 5) {
         throw new Error('usage: create line <id> <x1> <y1> <x2> <y2> [stroke]');
       }
@@ -48,6 +64,7 @@ export class ShapeFactory {
         Numeric.parse(params[2], 'x2'), Numeric.parse(params[3], 'y2'), params[4]);
     }
     if (type === 'text') {
+      params ??= ['0', '0', ''];
       if (params.length !== 3) {
         throw new Error('usage: create text <id> <x> <y> "content"');
       }

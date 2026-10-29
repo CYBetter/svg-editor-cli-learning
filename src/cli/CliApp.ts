@@ -11,7 +11,7 @@ export class CliApp {
   async run(): Promise<void> {
     const interactive = Boolean(process.stdin.isTTY && process.stdout.isTTY);
     const input = createInterface({ input: process.stdin, output: process.stdout, terminal: interactive });
-    process.stdout.write("svg-editor learning 0.1 — use 'init [w] [h]' to start, then 'help' for commands\n");
+    process.stdout.write("svg-editor learning 0.1 — use 'init [w] [h]' or 'read <file.svg>' to start, then 'help' for commands\n");
     if (interactive) { input.setPrompt('svg> '); input.prompt(); }
     for await (const line of input) {
       try {

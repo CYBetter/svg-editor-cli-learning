@@ -14,13 +14,13 @@ function editor(): { session: EditorSession; run: (line: string) => string | und
   return { session, run: line => dispatcher.parse(line)?.execute(session) };
 }
 
-test('help 列出当前命令、六类创建语法和关键约定，读取明确标记为后续功能', () => {
+test('help 列出全部命令、六类创建语法和关键约定，说明读取支持范围', () => {
   const { run } = editor();
   run('init');
   const help = run('help')!;
-  const [available, planned] = help.split('后续增量（当前尚未实现）：');
+  const available = help;
   const names = new Set(available.split('\n').filter(line => line.startsWith('  ')).map(line => line.trim().split(' ')[0]));
-  assert.deepEqual([...names].sort(), ['init', 'canvas', 'save', 'create', 'delete', 'move', 'scale', 'set', 'group', 'addto', 'ungroup', 'front', 'back', 'tree', 'show', 'help', 'undo', 'redo'].sort());
+  assert.deepEqual([...names].sort(), ['init', 'canvas', 'read', 'save', 'create', 'delete', 'move', 'scale', 'set', 'group', 'addto', 'ungroup', 'front', 'back', 'tree', 'show', 'help', 'undo', 'redo'].sort());
   for (const type of ['rect', 'circle', 'ellipse', 'line', 'text', 'g']) {
     const syntax = available.split('\n').find(line => line.startsWith(`  create ${type} `));
     assert.ok(syntax?.includes('<id>'));
@@ -30,10 +30,10 @@ test('help 列出当前命令、六类创建语法和关键约定，读取明确
   assert.ok(available.includes('单参改宽保留高'));
   assert.ok(available.includes('最近共同父容器'));
   assert.ok(available.includes('禁止解散根级容器'));
-  assert.ok(planned.includes('read <file.svg>'));
+  assert.ok(available.includes('read <file.svg>'));
   assert.ok(available.includes('save [file.svg]'));
-  assert.ok(!planned.includes('save [file.svg]'));
-  assert.throws(() => run('read demo.svg'), { message: 'unknown command: read' });
+  assert.ok(available.includes('读取范围：UTF-8 XML 1.0'));
+  assert.ok(!available.includes('尚未实现'));
 });
 
 test('help/canvas 按课设要求先初始化，非法参数不改变已建立的文档', () => {
@@ -181,7 +181,7 @@ test('第九轮真实 CLI 回放验证帮助、查询保留 redo、修改及失�
   assert.equal(result.status, 0);
   assert.equal(result.stderr.replace(/\r\n/g, '\n'), 'error: undo not allowed after io command\nerror: canvas height must be positive\n');
   const output = result.stdout.replace(/\r\n/g, '\n');
-  assert.ok(output.startsWith("svg-editor learning 0.1 — use 'init [w] [h]' to start, then 'help' for commands\n"));
+  assert.ok(output.startsWith("svg-editor learning 0.1 — use 'init [w] [h]' or 'read <file.svg>' to start, then 'help' for commands\n"));
   assert.equal(output.split('SVG CLI 命令帮助').length - 1, 2);
   assert.ok(output.includes('canvas 1000x600 updated\nrect#box  parent=g#scene\n  x=40 y=30 width=100 height=50\n  fill=red\n'));
   assert.ok(output.endsWith('canvas 640x480 updated\ncanvas 640x480\nsvg (640x480)\n└── g#scene\n    └── rect#box x=45 y=30 w=100 h=50 fill=red\n'));

@@ -14,8 +14,9 @@ export class HelpCommand extends Command {
       'SVG CLI 命令帮助',
       '文档：',
       '  init [w] [h]                   新建画布；默认 800x600',
+      '  read <file.svg>                读取支持范围内的 SVG；缺 id 自动补全并警告',
       '  canvas [w] [h]                 无参查询；单参改宽保留高；双参改宽高',
-      '  save [file.svg]                保存 SVG；init 后须给路径；read 接入后无参保存到读入路径',
+      '  save [file.svg]                保存 SVG；无参写回读入路径，另存不改变读入路径',
       '创建（in 可省略，省略时位于画布根）：',
       '  create rect <id> <x> <y> <w> <h> [fill] [in <containerId>]',
       '  create circle <id> <cx> <cy> <r> [fill] [in <containerId>]',
@@ -40,10 +41,10 @@ export class HelpCommand extends Command {
       '历史：',
       '  undo                           撤销上一次编辑',
       '  redo                           重做；撤销后新编辑清空重做记录',
-      '规则：先 init 再使用其他命令；带空格参数用双引号；# 开头整行是注释。',
-      '成功 init、save 或 canvas 修改会清空并禁用历史，直到下一次成功编辑。',
-      '后续增量（当前尚未实现）：',
-      '  read <file.svg>                读取 SVG',
+      '规则：先 init 或 read 再使用其他命令；带空格参数用双引号；# 开头整行是注释。',
+      '成功 init、read、save 或 canvas 修改会清空并禁用历史，直到下一次成功编辑。',
+      '读取范围：UTF-8 XML 1.0；六类图形及白名单属性，几何字段完整且为纯数值。',
+      '根须有正 width/height；viewBox 省略或为 0 0 width height；扩展属性明确报错。',
     ].join('\n');
   }
 }

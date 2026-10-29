@@ -5,7 +5,7 @@
 第一轮实现 init、create rect、tree（含 tree id）、move；第二轮增加 circle；第三轮增加 ellipse、line、text。
 第四轮增加 g 容器、create ... in、嵌套 tree 和整组 move；第五轮增加 scale、set、show。
 第六轮增加 delete、front、back；第七轮增加 group、addto、ungroup；第八轮增加 undo/redo 与 init 历史边界。
-第九轮增加 help、canvas 查询/修改与对应历史边界；第十轮增加 save、SVG 转换与文件写入，下一轮接入 read。
+第九轮增加 help、canvas 查询/修改与对应历史边界；第十轮增加 save；第十一轮增加 read、补 ID、读入路径及对应历史边界。
 当前不是完整的 Phase 1 提交版本；不创建 final tag。
 
 ## 模块职责与依赖
@@ -13,8 +13,8 @@
 | 目录 | 职责 | 允许依赖 |
 | --- | --- | --- |
 | src/domain | Shape、五类叶子、GroupShape、SvgDocument；封装几何行为、对象树、唯一 id 和查找；DrawingWriter 定义输出行为契约 | 本模块、语言标准库 |
-| src/application | 当前文档会话、Command/EditCommand 与具体命令、HistoryEntry；管理编辑与历史，DocumentSaver 定义保存端口 | domain、本模块 |
-| src/infrastructure | SvgWriter 转换 XML；SvgFileStore 实现保存端口，处理临时文件与目标替换 | domain、application、本模块、Node 标准库 |
+| src/application | 当前文档会话、Command/EditCommand、HistoryEntry；管理编辑、历史及读入路径，DocumentSaver/DocumentReader 定义读写端口，LoadedDocument 封装导入结果 | domain、本模块 |
+| src/infrastructure | SvgWriter/SvgReader 转换 XML；XmlElement 封装临时解析树；SvgFileStore 处理 UTF-8 文件读写与目标替换 | domain、application、本模块、Node 标准库、saxes |
 | src/cli | 分词、唯一命令分派入口、终端读写和错误显示 | application，本模块 |
 | src/Main.ts | 组装并启动应用，注入具体保存实现 | cli、application、infrastructure |
 
@@ -40,10 +40,11 @@ infrastructure --> domain
 
 ## 设计模式
 
-- Command（任务书要求）：所有具体命令实现相同 execute 契约，第十轮新增 SaveCommand。十类编辑继承 EditCommand，经统一 execute 模板在会话副本上调用 apply；查询、文档操作和历史操作直接继承 Command。
+- Command（任务书要求）：所有具体命令实现相同 execute 契约，第十一轮新增 ReadCommand。十类编辑继承 EditCommand，经统一 execute 模板在会话副本上调用 apply；查询、文档操作和历史操作直接继承 Command。
 - 输出与依赖注入：DrawingWriter 是领域输出契约，Shape 通过多态方法提供自身属性与内容，组递归输出孩子；SvgWriter 通用生成 XML，没有增加按图形名分派。DocumentSaver 是应用保存端口，Main 注入 SvgFileStore；文件 API 留在基础设施层。
 - 快照与封装：HistoryEntry 私有保存编辑前后的独立文档，恢复时再复制；EditorSession 管理两栈，不访问私有几何字段。具体图形用多态 cloneGeometry 复制自身数据，Shape 统一复制样式，不增加类型名称分派。
-- 文档操作边界：init 与 canvas 修改准备好新文档后再替换；save 在文件写入成功后清空、阻断历史，保留当前文档实例。三者共用私有 clearHistory；canvas 查询与 help 只读。
+- 文档操作边界：init/canvas 准备好新文档后再替换；read 完成全部解析与校验后接收文档、读入路径和警告；save 在文件写入成功后清历史且保留文档实例。文档操作共用 clearHistory，查询只读。
+- 导入与工厂复用：ShapeFactory 的 CLI 与导入入口共用私有 createShape 内的六个分支；候选新对象使用 Shape.restoreSvg 和多态 restoreText 恢复属性。XmlElement 是有封装的临时解析树，不替代图形模型；导入中没有通过标签选择具体图形类的第三处分派。
 - 多态与封装：Shape 定义行为，RectShape/CircleShape/EllipseShape/LineShape/TextShape 各自实现几何变化；文档保存 Shape，MoveCommand 不判断图形类型。
 - Composite：GroupShape 与叶子均为 Shape；组递归准备孩子的移动/缩放，tree 通过统一的 getChildren 遍历。普通 g 的 set 只改变自身样式，不向孩子复制；delete 通过 Shape.walk 收集整棵子树，命令不判断图形类型。
 - 移动与缩放的准备与提交：Shape.move/scale 先校验参数，再调用受保护的 prepareMove/prepareScale。叶子计算新几何值，组汇总孩子的更新；全部准备成功才同步执行只赋值的回调。回调不保存为历史，不把此机制表述为所有编辑命令的通用事务。
@@ -58,18 +59,24 @@ infrastructure --> domain
 2. 新增命令或撤销：用户第八轮选择文档快照，优先保证几何、样式和树结构完整恢复。新增编辑继承 EditCommand，新增图形实现多态复制；每条记录保存前后两份文档，内存随文档规模和历史长度增长，当前不设历史截断上限。
 3. 图形嵌套：文档维护根节点顺序及全局 id 索引；GroupShape 管理私有孩子。删除同步清理索引，分组迁移验证新树并生成对应索引；只有新增/解散组改变节点集合。
 4. 终端以外的入口：命令和领域对象不依赖终端，可以复用。
-5. 文件读写：第十轮实际引入 infrastructure 与最小保存端口，隔离 XML 和文件 API；接口已有真实调用与实现。read 下一轮加入，不提前实现解析器或动态插件框架。
+5. 文件读写：第十轮引入保存端口，第十一轮引入读取端口与完整导入结果；Main 将同一文件实现注入两个端口。使用固定 saxes 6.0.0 处理 XML 良构性，项目只处理 SVG 语义子集；库上游已归档，依赖版本与完整性由 lockfile 锁定，将来替换解析库只影响基础设施。
 6. 父级查询：show、删除、重排与迁移共用 findParent，单次扫描复杂度 O(N)。分组查共同祖先时会多次扫描，本轮保留便于复习的实现，不承诺整条 group 为线性复杂度；大文档性能需求出现后再考虑父级索引。
 7. 分组位置：任务书未完整规定跨父级放置规则，用户第七轮选择最近共同父容器；同父占首个选中位置，跨父置于最早受影响分支前。保持选中节点的原树深度优先顺序，与参数顺序无关。
-8. 对象引用：成功编辑、undo/redo、init 或 canvas 修改会发布新的 SvgDocument 实例，外部按 ID 重新查找，不跨命令缓存 Shape 引用；失败和查询保留原文档实例。直接领域对象修改用于内部操作和领域测试，不会自动记录会话历史。
+8. 对象引用：成功编辑、undo/redo、init、read 或 canvas 修改会发布新的 SvgDocument 实例，外部按 ID 重新查找，不跨命令缓存 Shape 引用；失败、查询和 save 保留原文档实例。直接领域对象修改用于内部操作和领域测试，不会自动记录会话历史。
+9. 读入范围：用户第十一轮选择先支持六类图形和正式属性，扩展属性明确报错。几何字段完整、显式无单位根尺寸及匹配 viewBox 是为控制实现范围而补充的约定，不冒充完整 SVG 支持。遇到 transform 等不通过丢弃属性来“成功”读取。
+10. 路径归属：读入路径是会话信息，使用成功读入时解析的绝对路径；不属于可撤销编辑快照。另存不改来源路径，init 成功清除，canvas 与编辑/历史保留，失败操作不改变。
 
 ## 本轮具体约定
 
 - init 无参数为 800×600，单参数只改变宽；画布尺寸必须是有限正数。
 - canvas 无参查询、单参改宽并保留当前高度、双参修改宽高。单参数行为是本实现补充约定；画布修改不缩放或裁掉模型中的图形，全部几何值、显式样式、层级和顺序保留。
-- help 列出 18 条已实现命令及六类创建语法，仅 read 标为尚未实现。按课设通用初始化错误约定，help 也要求先 init；启动提示说明先 init、再 help。
+- help 列出全部 19 条命令、六类创建语法及读入范围。按课设通用初始化错误约定，help 也要求先 init/read；启动提示说明这一顺序。
 - save 输出 UTF-8 XML，根包含 SVG 命名空间、画布尺寸和等尺寸 viewBox；六类元素按树顺序输出，计数含 g、不含 svg 根。TextShape 的 text 伪属性作为元素内容，空内容也不丢失。
-- 无参 save 的默认路径严格来自 read；当前只有 init 文档，故报 no source file. use save <file.svg>。显式 save 不建立或改变读入路径；下一轮 read 接入后完成默认路径流程。空路径报 cannot write file，带空格路径须加引号，相对路径以进程工作目录为基准，父目录不自动创建。
+- 无参 save 的默认路径严格来自最近成功 read；init 文档没有来源路径，报 no source file. use save <file.svg>。显式 save 不建立或改变读入路径。空路径报 cannot write file，带空格路径须加引号，相对路径以进程工作目录为基准，父目录不自动创建。
+- read 支持 UTF-8 XML 1.0，声明、注释、CDATA、预定义实体和数字字符引用；XML 良构性错误直接失败，禁止 DOCTYPE、自定义实体和其他处理指令。文件不存在、空路径、目录或符号链接目标报 cannot read file；无效 UTF-8 不替换成乱码继续解析。
+- SVG 根命名空间可为标准 SVG URI 或空；所有孩子须一致，正确 SVG 前缀可以使用。根只接受 width/height 与可选 viewBox：前两者显式正数，viewBox 省略或严格为 0 0 width height；数值无单位，支持首尾 XML 空白。
+- 六类几何字段须完整；公共样式可省略，所有字段通过现有领域校验恢复。text 内容保留空白与空字符串，其他元素仅接受 XML 排版空白；叶子包含子元素、XML text 伪属性、未知元素/属性均报错。注释与命名空间前缀排版不作为编辑模型保存。
+- 自动补 ID 先预留全部非空显式 ID（大小写敏感、跨类型全局唯一），再按原树先序为缺失/空 ID 分配每类从 1 开始的最小可用编号；所有补 ID 警告都在完整导入成功后发布。
 - 保存先完成转换，再独占创建同目录临时文件、写入、关闭并替换目标；不先截断旧文件。失败时尽力清理自己创建的临时文件，原文件和会话状态不变；拒绝目录及符号链接目标。当前保障普通本地文件的命令失败行为，不承诺断电后的持久性。
 - XML 文本和属性转义分开处理；合法制表、回车和换行使用字符引用保留，拒绝 XML 1.0 非法字符与未配对代理项，不静默替换字符。依据 [XML 字符范围及转义规则](https://www.w3.org/TR/xml/#charsets) 与 [SVG viewBox](https://www.w3.org/TR/SVG2/coords.html#ViewBoxAttribute)。
 - 几何坐标允许负数和小数；矩形宽高、圆形半径、椭圆两条半径为有限非负数，允许零尺寸。几何尺寸非负是本实现的校验约定。
@@ -94,9 +101,9 @@ infrastructure --> domain
 - 移动中的对象始终保留显式样式与几何值；不复制旧组样式，继承效果可能改变。这是当前结构编辑的约定，不是保持渲染外观的扁平化。
 - prepareChildren 为文档内部提交接口，只在完整新树通过验证后调用返回的赋值回调。命令不可直接使用，也不可保存或延后运行；准备阶段抛错时没有任何列表或归属修改。
 - 一条成功编辑占一个历史单元，包括 move 0 0、已在末尾的 front 等无变化编辑；失败编辑、查询和解析错误不入栈、不清 redo。undo 后成功新编辑清 redo。
-- 成功 init、save 或 canvas 修改清空两栈并阻断历史，undo 与 redo 都使用课设指定的 undo not allowed after io command 错误；下一次成功编辑解禁。相同尺寸的成功 canvas 也执行该边界；查询不解除阻断。未初始化优先报告 no document；解禁后的空栈报 nothing to undo / nothing to redo。
+- 成功 init、read、save 或 canvas 修改清空两栈并阻断历史，undo 与 redo 都使用课设指定的 undo not allowed after io command 错误；下一次成功编辑解禁。相同尺寸的成功 canvas 也执行该边界；查询不解除阻断。未初始化执行编辑/查询/保存/历史时报 no document，read 与 init 可以创建当前文档；解禁后的空栈报 nothing to undo / nothing to redo。
 - 执行顺序为：复制工作文档、执行编辑、生成前后历史快照，最后发布文档并更新历史。undo/redo 也先恢复副本再移动栈项。重做直接恢复记录的后状态，不重新执行命令。
-- 历史成功摘要为 undone/redone 加原编辑摘要；完整快照保留缺省样式、文本、顺序和精确浮点值。canvas 与 save 均在各自成功边界清历史，失败保留历史；read 留到下一轮。
+- 历史成功摘要为 undone/redone 加原编辑摘要；完整快照保留缺省样式、文本、顺序和精确浮点值。init/read/save 与 canvas 修改均在各自成功边界清历史；失败保留文档、路径和历史。
 
 ## Git 记录规则
 
@@ -117,8 +124,8 @@ infrastructure --> domain
 | 撤销重做（已实现） | undo、redo；init 历史边界 | 第八轮新增 12 组测试通过；十类编辑均可恢复；失败/查询保留 redo | 用户选择文档快照；复习深复制、双栈与先准备后提交 |
 | 辅助命令（已实现） | help、canvas | 第九轮新增 8 组测试通过；尺寸查询跳过历史；修改成功后清空并禁用历史，失败保留文档及历史 | 区分查询、可撤销编辑与文档操作；验证/复制完成后再替换文档 |
 | SVG 保存（已实现） | save、输出转换与 IO 历史边界 | 第十轮新增 12 组测试通过；失败保留旧文件和历史；浏览器渲染、叠放及字符还原通过 | 模型、XML 和文件 IO 的职责分离；默认路径必须来自 read |
-| SVG 读取（下一轮） | read、补 id、往返验证及读入路径 | 预留全部显式 id，再补缺失 id 并警告；重复 id/损坏文件不替换当前文档；读回层级、顺序和样式一致；无参 save 回到读入路径 | 明确外部 SVG 支持范围；背景示例含 transform，需要在实现前讨论是否纳入，不能静默丢弃 |
-| 最终验收与交付 | 完整示例、边界测试、架构审查、文档与 final | 第 6 节和 6.1 版本 A 回放；错误文本及状态核对；一类一文件、依赖与两处分派检查；远程 main 与 final 均验证 | 对照最初方案解释真实改动；过程记录不代写尚未发生的学习体验 |
+| SVG 读取（已实现） | read、补 id、往返验证及读入路径 | 第十一轮新增 18 组测试通过；先预留 ID 再补缺失；失败保留文档/路径/历史；无参 save 回到读入路径 | 用户已选择正式子集并拒绝扩展属性；理解良构性与领域校验、候选文档与一次接收 |
+| 最终验收与交付（下一轮） | 完整示例、边界测试、架构审查、文档与 final | 第 6 节和 6.1 版本 A 回放；错误文本及状态核对；一类一文件、依赖与两处分派检查；远程 main 与 final 均验证 | 对照最初方案解释真实改动及已确认范围；过程记录不代写尚未发生的学习体验 |
 
 第十轮已引入 infrastructure 及必要输出/保存契约，并同步修订依赖图；展示和树查询复杂化时再评估提取 presentation。
 box、动态插件框架和图形界面均不列入本期交付。
@@ -246,9 +253,23 @@ box、动态插件框架和图形界面均不列入本期交付。
 - AI 实际回放 step-10.commands.txt 生成 step-10.svg，在 Edge 中打开并检查 10 个元素、640×260 尺寸、继承蓝色、显式橙色和白色文字；另用重叠矩形验证 front/back。预览脚本首次因运行限制无法启动浏览器，获得执行权限后修正 XML 页面不能直接 setContent 的测试脚本问题，最终全部检查通过；这两项属于验证环境/脚本处理，不是产品功能修复。
 - 独立只读复核实现与测试，未发现需要修复的实际缺陷。用户尚未提供本轮手动验收或理解反馈，不把自动测试和 AI 浏览器检查写成用户已完成学习。
 
+## 2026-10-30：SVG 读取、补 ID 与读入路径
+
+- 用户要求继续执行。本轮限定为 read、缺 ID 补全、来源路径和历史边界，最终综合验收及 final tag 留到下一轮。
+- AI 指出课设背景示例含 transform/font-size，而正式编辑只覆盖六类图形和属性白名单。用户明确选择“先覆盖正式范围，扩展属性明确报错（推荐）”；本实现据此拒绝不能保留的扩展，不静默丢弃。
+- 为控制解析语义，进一步采用完整几何字段、无单位的显式根宽高、可省略或匹配尺寸的 viewBox。已明确这是实现输入约定，不把它写成用户逐项选择或 SVG 规范要求。
+- 引入固定 saxes 6.0.0 解析 XML 良构性，另由 SvgReader 检查 SVG 子集。先前配置的 npm 镜像无法解析域名，改用官方 npm 源、禁用安装脚本完成安装；新增依赖与 lockfile 一起提交。解析库来源见 [官方仓库](https://github.com/lddubeau/saxes)。
+- XmlElement 封装临时 XML 树；SvgReader 先预留全部显式 ID、检查重复，再按树序为无名元素分配最小可用编号。修正的设计风险是“前面的无名图形抢占后面的显式 ID”，并通过跨类型、后置 ID 和嵌套测试验证。
+- CLI 与 SVG 导入共用 ShapeFactory 私有构造入口；临时零几何对象只在导入内部使用，恢复完整属性后才加入候选文档。restoreSvg 限定工厂新建未挂接对象，失败候选直接丢弃，TextShape 多态恢复原始文字。
+- SvgFileStore 读取普通文件并严格解码 UTF-8；LoadedDocument 封装完整文档、绝对来源路径和暂存警告。EditorSession 先取得全部结果与反馈，再替换当前状态，失败不发布半份文档或半程警告。
+- 来源路径独立于编辑快照：read 成功更新，显式另存/canvas/edit/undo/redo 均保留，成功 init 清除；失败 init/read/save 保留。无参 save 始终回到最近成功读入的路径，遵循课设原文。
+- 新增 18 组读取测试并更新帮助测试，首次完整严格编译与全量运行 116/116 通过。覆盖六类读写往返、嵌套与样式、实体/CDATA/空白、XML 畸形、命名空间、范围拒绝、路径切换和历史失败保留。
+- 实际回放 step-11.commands.txt：other.svg 自动补 rect1 并读入 7 元素，缺失文件错误后仍可 redo，另存再读入后无参 save 更新 step-11.svg；确认课设原始 other.svg 未改变。上一轮 step-10.svg 读入再输出逐字一致。
+- 独立只读复核实现与测试未发现需修复的问题。用户本轮参与了读取范围选择，但尚未报告手动运行和代码理解结果；不把 AI 测试写成用户已掌握。
+
 # 一致性自查
 
-第十轮在原三层基础上新增 infrastructure，并已修订方案与依赖图。src 下 39 个类各自放在同名文件，另有 CommandToken 输入接口与 DrawingWriter 输出接口。
+第十轮新增 infrastructure，第十一轮在该模块补齐读取；方案与依赖图已同步。src 下 44 个类各自放在同名文件，另有 CommandToken 输入接口与 DrawingWriter 输出接口。
 
 - 抽查 MoveCommand：只依赖 application 与 domain，调用 shape.move，不直接修改几何字段。
 - 抽查六类图形及 SvgDocument：只依赖 domain，没有 Node、终端或文件 IO 依赖。
@@ -262,12 +283,13 @@ box、动态插件框架和图形界面均不列入本期交付。
 - EditCommand 统一组织会话编辑，HistoryEntry 封装快照，领域层不依赖 application。复制通过子类方法完成，不增加第三处名称分派。
 - CanvasCommand 区分有参修改与无参查询，这是命令语义判断；HelpCommand 的静态帮助文本不是名称到实现的分派。画布复制留在领域层，历史边界留在会话层。
 - Shape.writeTo 只依赖领域输出契约，TextShape 多态提供内容；SvgWriter 对名称统一生成元素，不按名称选择实现。输出属性是临时只读数据，领域对象的私有字段与行为仍保留。
-- EditorSession 依赖 application 内的 DocumentSaver 抽象类；SvgFileStore 反向实现此端口。只有 infrastructure 导入 Node 文件 API，Main 负责组装；没有 application/domain 到 infrastructure 的反向依赖。
-- Composite、历史、辅助命令与 SVG 保存已实现；读取尚未完成，因此这里只是前十个增量的一致性检查。
+- EditorSession 依赖 application 内的 DocumentSaver/DocumentReader；SvgFileStore 实现两个端口，LoadedDocument 封装完整输入结果。文件 API 和 saxes 仅在 infrastructure，Main 负责组装；没有 application/domain 到 infrastructure 的反向依赖。
+- SvgReader 只识别文档根及通用结构规则，通过 factory.createFromSvg 构建所有图形。工厂的两个公开入口共用一套私有类型分支；属性白名单与文字恢复属于图形类的多态行为，没有增加第三处名称到图形实现的分派。
+- 全部命令已接入，以上为前十一个增量的一致性检查；最终交付前仍须综合验收及核对文档、远程提交与 final tag。
 
 # 质量保证手段
 
-执行 `npm test`：TypeScript 严格编译通过，Node 内置测试运行器 98/98 通过（第一轮 9 组，第二轮 5 组，第三轮 10 组，第四轮 10 组，第五轮 10 组，第六轮 10 组，第七轮 12 组，第八轮 12 组，第九轮 8 组，第十轮 12 组）。
+执行 `npm test`：TypeScript 严格编译通过，Node 内置测试运行器 116/116 通过（第一轮 9 组，第二轮 5 组，第三轮 10 组，第四轮 10 组，第五轮 10 组，第六轮 10 组，第七轮 12 组，第八轮 12 组，第九轮 8 组，第十轮 12 组，第十一轮 18 组）。
 
 | 验证内容 | 结果 |
 | --- | --- |
@@ -320,7 +342,7 @@ box、动态插件框架和图形界面均不列入本期交付。
 | 无变化编辑计入历史，初始化阻断、解禁、空栈和非法历史参数 | 通过 |
 | 工作副本部分修改异常、后快照失败及 undo/redo 恢复失败均保留原实例和历史 | 通过 |
 | 第八轮真实 CLI 历史回放、init 后精确错误提示 | 通过 |
-| help 覆盖现有命令与六类创建语法、标注后续功能、初始化与参数错误 | 通过 |
+| help 覆盖全部命令与六类创建语法、读取范围、初始化与参数错误 | 通过 |
 | help/canvas 查询保留当前实例和 redo、不入栈也不解除历史阻断 | 通过 |
 | canvas 单参保留当前高度、双参修改、全部几何/样式/层级/顺序保持 | 通过 |
 | 非正/非有限尺寸、参数错误及复制中途失败均保留原文档和历史 | 通过 |
@@ -334,12 +356,22 @@ box、动态插件框架和图形界面均不列入本期交付。
 | 临时文件部分写失败或替换失败，保留旧文件/模型/两栈并清理临时文件 | 通过 |
 | 中文空格路径、覆盖当前状态、真实 CLI 相对路径及失败后 redo | 通过 |
 | step-10.svg 在 Edge 中渲染、继承/覆盖样式、XML 字符精确还原及 front/back 叠放 | AI 验证通过 |
+| 课设 other.svg 精确补 ID 警告、7 元素层级/顺序/父级 | 通过 |
+| 预留后置显式 ID、跨类型避撞、先序补号、空 ID、大小写、重复 ID | 通过 |
+| 六类保存→读取→保存的模型与文本一致，空图/组/文字、实体和 CDATA | 通过 |
+| 标准/无命名空间/前缀输入，外来 URI 和 namespaced 属性拒绝 | 通过 |
+| XML 畸形、重复属性、非法字符/实体、DTD/PI、版本与 UTF-8 错误拒绝 | 通过 |
+| transform 等扩展、未知类型/属性、叶子孩子、非文字内容和尺寸/几何边界 | 通过 |
+| 成功读取替换文档和阻断历史；失败保留原实例、两栈、默认路径且不吐半程警告 | 通过 |
+| 另存保留读入路径，成功 init 清路径，失败 init 和 canvas/history 保留路径 | 通过 |
+| 多次 read 切换路径、读取器复用不残留状态、中文空格路径真实 CLI 回放 | 通过 |
+| 第十一轮实际脚本读写，other.svg 原文件不变、失败后 redo 和无参保存 | AI 验证通过 |
 | 交互终端 svg> 提示符和最小命令链 | AI 验证通过 |
 | 用户手动验收与关键代码讨论 | 待用户反馈 |
 
-功能测试文件为 tests/FirstIncrement.test.ts、tests/CircleIncrement.test.ts、tests/LeafShapesIncrement.test.ts、tests/CommandTokenizer.test.ts、tests/GroupIncrement.test.ts、tests/AttributeIncrement.test.ts、tests/TreeEditingIncrement.test.ts、tests/GroupingIncrement.test.ts、tests/HistoryIncrement.test.ts、tests/CanvasHelpIncrement.test.ts 与 tests/SaveIncrement.test.ts；回放脚本为 examples/step-01.commands.txt 至 examples/step-10.commands.txt。第十轮的实际 SVG 输出随脚本保存，浏览器检查独立于 npm test。
+功能测试文件为 tests/FirstIncrement.test.ts、tests/CircleIncrement.test.ts、tests/LeafShapesIncrement.test.ts、tests/CommandTokenizer.test.ts、tests/GroupIncrement.test.ts、tests/AttributeIncrement.test.ts、tests/TreeEditingIncrement.test.ts、tests/GroupingIncrement.test.ts、tests/HistoryIncrement.test.ts、tests/CanvasHelpIncrement.test.ts、tests/SaveIncrement.test.ts 与 tests/ReadIncrement.test.ts；回放脚本为 examples/step-01.commands.txt 至 examples/step-11.commands.txt。课设 other.svg 与第十、十一轮的实际输出随脚本保存，浏览器检查独立于 npm test。
 一组测试可以覆盖多个边界用例；以上表格不表示每行均对应一个独立测试。
 
-第十轮已验证带反斜杠的绝对保存路径、中文空格文件名及相对路径；读取路径留到 read 增量测试。
-当前编辑与历史已测试失败不变，canvas/save 已验证成功与失败的历史边界；后续 read 仍须验证读入路径、补 id、成功清历史及失败保留文档/历史。
+读写均已验证带反斜杠的绝对路径、中文空格文件名及相对路径，默认保存目标按成功读取时的绝对路径固定。
+当前编辑与全部文档命令已测试成功/失败边界；下一轮进行课设整体回放与最终一致性验收，不把“命令已接入”直接等同最终交付完成。
 用户手动体验与设计讨论独立记录，未实现功能不记为测试通过。

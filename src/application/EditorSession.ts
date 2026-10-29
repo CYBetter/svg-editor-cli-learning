@@ -1,29 +1,46 @@
 import { SvgDocument } from '../domain/SvgDocument';
 import { HistoryEntry } from './HistoryEntry';
 import { DocumentSaver } from './DocumentSaver';
+import { DocumentReader } from './DocumentReader';
 
 export class EditorSession {
   private currentDocument?: SvgDocument;
   private undoStack: HistoryEntry[] = [];
   private redoStack: HistoryEntry[] = [];
   private historyBlocked = true;
+  private sourcePath?: string;
 
-  constructor(private readonly saver?: DocumentSaver) {}
+  constructor(private readonly saver?: DocumentSaver, private readonly reader?: DocumentReader) {}
+
+  read(filePath: string): string {
+    if (!this.reader) throw new Error('reading is not configured');
+    const loaded = this.reader.read(filePath);
+    const document = loaded.document;
+    const sourcePath = loaded.sourcePath;
+    const result = loaded.describe(filePath);
+    // 文件、全部图形、ID 和反馈都准备好后，再接收文档与读入路径。
+    this.replaceDocument(document);
+    this.sourcePath = sourcePath;
+    return result;
+  }
 
   save(filePath?: string): string {
     const document = this.document;
-    // 课设默认路径来自 read；当前仅有 init 文档，不把另存路径当成读入路径。
-    if (filePath === undefined) throw new Error('no source file. use save <file.svg>');
+    const target = filePath ?? this.sourcePath;
+    if (target === undefined) throw new Error('no source file. use save <file.svg>');
     if (!this.saver) throw new Error('saving is not configured');
-    const result = `saved to ${filePath} (${document.elementCount} elements)`;
-    this.saver.save(document, filePath);
+    const result = `saved to ${target} (${document.elementCount} elements)`;
+    this.saver.save(document, target);
     this.clearHistory();
     return result;
   }
 
   initialize(width: number, height: number): SvgDocument {
     // 构造完成才替换，非法 init 不丢失旧文档。
-    return this.replaceDocument(new SvgDocument(width, height));
+    const document = new SvgDocument(width, height);
+    this.replaceDocument(document);
+    this.sourcePath = undefined;
+    return document;
   }
 
   resizeCanvas(width: number, height?: number): SvgDocument {

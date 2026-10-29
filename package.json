@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "description": "SVG CLI course project developed through guided, incremental AI collaboration",
-  "engines": { "node": ">=18.17" },
+  "engines": {
+    "node": ">=18.17"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "cli": "npm run build --silent && node dist/src/Main.js",
@@ -12,5 +14,8 @@
   "devDependencies": {
     "@types/node": "18.19.130",
     "typescript": "5.9.3"
+  },
+  "dependencies": {
+    "saxes": "6.0.0"
   }
 }

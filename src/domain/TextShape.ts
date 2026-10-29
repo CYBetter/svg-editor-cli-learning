@@ -21,6 +21,10 @@ export class TextShape extends Shape {
     return { x: this.x, y: this.y };
   }
 
+  protected override restoreText(content: string): void {
+    this.content = content;
+  }
+
   protected override cloneGeometry(): TextShape {
     return new TextShape(this.id, this.x, this.y, this.content);
   }
