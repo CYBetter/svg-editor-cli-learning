@@ -9,7 +9,15 @@ export class EditorSession {
 
   initialize(width: number, height: number): SvgDocument {
     // 构造完成才替换，非法 init 不丢失旧文档。
-    const document = new SvgDocument(width, height);
+    return this.replaceDocument(new SvgDocument(width, height));
+  }
+
+  resizeCanvas(width: number, height?: number): SvgDocument {
+    return this.replaceDocument(this.document.withCanvasSize(width, height));
+  }
+
+  private replaceDocument(document: SvgDocument): SvgDocument {
+    // 文档操作成功后才清历史；init 和 canvas 修改共用同一边界。
     this.currentDocument = document;
     this.undoStack = [];
     this.redoStack = [];

@@ -1,0 +1,23 @@
+# 第九轮：帮助、画布查询与修改的历史区别
+init 800 600
+help
+create g scene
+create rect box 10 20 100 50 red in scene
+move box 30 10
+undo
+# 两种查询都不破坏 redo
+canvas
+help
+redo
+# 只改宽，高度仍为 600；图形不缩放
+canvas 1000
+show box
+undo
+# 失败修改不破坏撤销后的 redo
+move box 5 0
+undo
+canvas 1200 -1
+redo
+canvas 640 480
+canvas
+tree

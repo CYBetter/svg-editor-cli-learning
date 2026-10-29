@@ -14,7 +14,12 @@ export class SvgDocument {
   get size(): string { return `${this.width}x${this.height}`; }
 
   clone(): SvgDocument {
-    const copy = new SvgDocument(this.width, this.height);
+    return this.withCanvasSize(this.width, this.height);
+  }
+
+  withCanvasSize(width: number, height: number = this.height): SvgDocument {
+    // 先验证两项尺寸，再复制图形；修改画布不改变图形的几何值。
+    const copy = new SvgDocument(width, height);
     for (const root of this.roots) copy.add(root.clone());
     return copy;
   }

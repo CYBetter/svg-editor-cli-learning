@@ -5,7 +5,7 @@
 第一轮实现 init、create rect、tree（含 tree id）、move；第二轮增加 circle；第三轮增加 ellipse、line、text。
 第四轮增加 g 容器、create ... in、嵌套 tree 和整组 move；第五轮增加 scale、set、show。
 第六轮增加 delete、front、back；第七轮增加 group、addto、ungroup；第八轮增加 undo/redo 与 init 历史边界。
-后续继续 help/canvas 和文件读写。
+第九轮增加 help、canvas 查询/修改与对应历史边界；后续先 save，再 read。
 当前不是完整的 Phase 1 提交版本；不创建 final tag。
 
 ## 模块职责与依赖
@@ -35,8 +35,9 @@ application --> domain
 
 ## 设计模式
 
-- Command（任务书要求）：所有具体命令实现相同 execute 契约，本轮新增 UndoCommand、RedoCommand。十类编辑继承 EditCommand，经统一 execute 模板在会话副本上调用 apply；查询、init 和历史操作仍直接继承 Command。
+- Command（任务书要求）：所有具体命令实现相同 execute 契约，第九轮新增 HelpCommand、CanvasCommand。十类编辑继承 EditCommand，经统一 execute 模板在会话副本上调用 apply；查询、文档操作和历史操作直接继承 Command。
 - 快照与封装：HistoryEntry 私有保存编辑前后的独立文档，恢复时再复制；EditorSession 管理两栈，不访问私有几何字段。具体图形用多态 cloneGeometry 复制自身数据，Shape 统一复制样式，不增加类型名称分派。
+- 文档操作边界：init 与 canvas 修改先构造完整有效的新文档，再经 EditorSession 私有 replaceDocument 替换并清空、阻断历史。canvas 查询与 help 只读；画布修改不作为可撤销编辑。
 - 多态与封装：Shape 定义行为，RectShape/CircleShape/EllipseShape/LineShape/TextShape 各自实现几何变化；文档保存 Shape，MoveCommand 不判断图形类型。
 - Composite：GroupShape 与叶子均为 Shape；组递归准备孩子的移动/缩放，tree 通过统一的 getChildren 遍历。普通 g 的 set 只改变自身样式，不向孩子复制；delete 通过 Shape.walk 收集整棵子树，命令不判断图形类型。
 - 移动与缩放的准备与提交：Shape.move/scale 先校验参数，再调用受保护的 prepareMove/prepareScale。叶子计算新几何值，组汇总孩子的更新；全部准备成功才同步执行只赋值的回调。回调不保存为历史，不把此机制表述为所有编辑命令的通用事务。
@@ -54,11 +55,13 @@ application --> domain
 5. 文件读写：届时新增基础设施模块，当前不提前创建空接口。
 6. 父级查询：show、删除、重排与迁移共用 findParent，单次扫描复杂度 O(N)。分组查共同祖先时会多次扫描，本轮保留便于复习的实现，不承诺整条 group 为线性复杂度；大文档性能需求出现后再考虑父级索引。
 7. 分组位置：任务书未完整规定跨父级放置规则，用户第七轮选择最近共同父容器；同父占首个选中位置，跨父置于最早受影响分支前。保持选中节点的原树深度优先顺序，与参数顺序无关。
-8. 对象引用：成功编辑或 undo/redo 会发布新的 SvgDocument 实例，外部按 ID 重新查找，不跨命令缓存 Shape 引用；失败保留原文档实例。直接领域对象修改用于内部操作和领域测试，不会自动记录会话历史。
+8. 对象引用：成功编辑、undo/redo、init 或 canvas 修改会发布新的 SvgDocument 实例，外部按 ID 重新查找，不跨命令缓存 Shape 引用；失败和查询保留原文档实例。直接领域对象修改用于内部操作和领域测试，不会自动记录会话历史。
 
 ## 本轮具体约定
 
 - init 无参数为 800×600，单参数只改变宽；画布尺寸必须是有限正数。
+- canvas 无参查询、单参改宽并保留当前高度、双参修改宽高。单参数行为是本实现补充约定；画布修改不缩放或裁掉模型中的图形，全部几何值、显式样式、层级和顺序保留。
+- help 列出全部命令及六类创建语法，read/save 目前标为尚未实现。按课设通用初始化错误约定，help 也要求先 init；启动提示说明先 init、再 help。
 - 几何坐标允许负数和小数；矩形宽高、圆形半径、椭圆两条半径为有限非负数，允许零尺寸。几何尺寸非负是本实现的校验约定。
 - 移动先计算并检查全部新坐标，再统一赋值，避免一项成功一项失败。
 - fill / stroke 省略时保持未指定；线段的可选样式是 stroke。
@@ -81,9 +84,9 @@ application --> domain
 - 移动中的对象始终保留显式样式与几何值；不复制旧组样式，继承效果可能改变。这是当前结构编辑的约定，不是保持渲染外观的扁平化。
 - prepareChildren 为文档内部提交接口，只在完整新树通过验证后调用返回的赋值回调。命令不可直接使用，也不可保存或延后运行；准备阶段抛错时没有任何列表或归属修改。
 - 一条成功编辑占一个历史单元，包括 move 0 0、已在末尾的 front 等无变化编辑；失败编辑、查询和解析错误不入栈、不清 redo。undo 后成功新编辑清 redo。
-- 成功 init 清空两栈并阻断历史，undo 与 redo 都使用课设指定的 undo not allowed after io command 错误；下一次成功编辑解禁。未初始化优先报告 no document；解禁后的空栈报 nothing to undo / nothing to redo。
+- 成功 init 或 canvas 修改清空两栈并阻断历史，undo 与 redo 都使用课设指定的 undo not allowed after io command 错误；下一次成功编辑解禁。相同尺寸的成功 canvas 也执行该边界；查询不解除阻断。未初始化优先报告 no document；解禁后的空栈报 nothing to undo / nothing to redo。
 - 执行顺序为：复制工作文档、执行编辑、生成前后历史快照，最后发布文档并更新历史。undo/redo 也先恢复副本再移动栈项。重做直接恢复记录的后状态，不重新执行命令。
-- 历史成功摘要为 undone/redone 加原编辑摘要；完整快照保留缺省样式、文本、顺序和精确浮点值。read/save/canvas 历史边界尚未实现，留到相应增量验收。
+- 历史成功摘要为 undone/redone 加原编辑摘要；完整快照保留缺省样式、文本、顺序和精确浮点值。canvas 已验证查询、成功修改与失败的历史边界；read/save 留到相应增量验收。
 
 ## Git 记录规则
 
@@ -102,8 +105,8 @@ application --> domain
 | 树结构编辑 A（已实现） | delete、front、back | 第六轮新增 10 组测试通过；删除释放后代 id，重排保持父级与内部顺序；用户体验待反馈 | 对象树与索引如何一起保持一致；数组顺序与 SVG 绘制顺序的关系 |
 | 树结构编辑 B（已实现） | group、addto、ungroup | 第七轮新增 12 组测试通过；分组保序、原位解组、防环与失败不变 | 用户已选择最近共同父容器规则；列表副本与一次提交，手动验收待反馈 |
 | 撤销重做（已实现） | undo、redo；init 历史边界 | 第八轮新增 12 组测试通过；十类编辑均可恢复；失败/查询保留 redo | 用户选择文档快照；复习深复制、双栈与先准备后提交 |
-| 辅助命令（下一轮） | help、canvas | 帮助对应现有命令；尺寸查询跳过历史；修改成功后禁用历史，失败保留文档及历史 | 区分查询与修改；为同一命令的两种行为选择清晰入口 |
-| SVG 保存 | save、默认路径规则、IO 历史边界 | 正确命名空间与文本转义；省略未指定样式；保存失败不清历史；成功保存后禁用 undo/redo；浏览器预览 | 模型与 XML/文件 IO 的职责分离；首次无路径保存与默认路径约定 |
+| 辅助命令（已实现） | help、canvas | 第九轮新增 8 组测试通过；尺寸查询跳过历史；修改成功后清空并禁用历史，失败保留文档及历史 | 区分查询、可撤销编辑与文档操作；验证/复制完成后再替换文档 |
+| SVG 保存（下一轮） | save、默认路径规则、IO 历史边界 | 正确命名空间与文本转义；省略未指定样式；保存失败不清历史；成功保存后禁用 undo/redo；浏览器预览 | 模型与 XML/文件 IO 的职责分离；首次无路径保存与默认路径约定 |
 | SVG 读取 | read、补 id、往返验证 | 预留全部显式 id，再补缺失 id 并警告；重复 id/损坏文件不替换当前文档；读回层级、顺序和样式一致 | 明确外部 SVG 支持范围；背景示例含 transform，需要在实现前讨论是否纳入，不能静默丢弃 |
 | 最终验收与交付 | 完整示例、边界测试、架构审查、文档与 final | 第 6 节和 6.1 版本 A 回放；错误文本及状态核对；一类一文件、依赖与两处分派检查；远程 main 与 final 均验证 | 对照最初方案解释真实改动；过程记录不代写尚未发生的学习体验 |
 
@@ -209,9 +212,20 @@ box、动态插件框架和图形界面均不列入本期交付。
 - 独立只读核心及测试复核未发现缺陷，并提醒明确新文档实例的引用约定；已区分领域操作内部身份与跨命令引用。补充恢复失败测试后，再次严格编译及全量运行 78/78 通过。
 - 用户本轮实际参与了方案选择；尚未提供手动验收和代码理解反馈，不把选择快照写成已掌握其实现。
 
+## 2026-10-29：帮助与画布尺寸
+
+- 用户要求继续执行，本轮按既有计划限定为 help、canvas；没有提前实现 SVG 读写。
+- 核对课设：help 显示全部命令语法，查询不入历史；canvas 修改属于清空并禁用历史的文档操作。通用初始化错误约定同样用于 help，启动提示改为先 init、再 help。
+- 对任务书未单独说明的 canvas 单参行为，AI 采用“只改宽并保留当前高度”的约定，并在帮助和使用说明中明确；此项不是用户另行选择的设计结论。
+- 新增两个 Command。CanvasCommand 根据是否有参数区分查询与修改；HelpCommand 展示现有语法，将 read/save 标为尚未实现，没有新增名称到实现的分派点。
+- SvgDocument.withCanvasSize 先验证新尺寸，再通过既有多态复制保留图形；EditorSession 将 init 和 canvas 修改的替换及清历史流程收拢为私有方法。查询不换文档，失败校验或复制异常也不换文档、不清历史。
+- 新增 8 组测试，首次严格编译及全量运行 86/86 通过。覆盖六类对象几何/样式/顺序保留、单参/双参尺寸、无效值、查询保留 redo、相同尺寸仍阻断历史、新编辑基线及复制中途失败；真实 CLI 回放含两条预期错误。
+- 独立只读复核核对了帮助语法、初始化规则、尺寸复制与历史边界，未发现需修复的问题；未重复执行测试。
+- 用户未提供本轮手动验收或代码理解反馈；本轮提供短命令实验，供其复习查询、可撤销编辑和文档操作的区别。
+
 # 一致性自查
 
-当前实现与三层方案一致，src 下 33 个类各自放在同名文件，另有 CommandToken 只读输入接口。
+当前实现与三层方案一致，src 下 35 个类各自放在同名文件，另有 CommandToken 只读输入接口。
 
 - 抽查 MoveCommand：只依赖 application 与 domain，调用 shape.move，不直接修改几何字段。
 - 抽查六类图形及 SvgDocument：只依赖 domain，没有 Node、终端或文件 IO 依赖。
@@ -220,14 +234,15 @@ box、动态插件框架和图形界面均不列入本期交付。
 - 容器增量通过多态提供能力；历史增量将十类编辑的业务入口改为 EditCommand.apply，查询命令保持原行为，没有按 tag 添加分散判断。
 - CommandToken 是不负责业务行为的只读输入元数据，不是公共数据袋形式的图形模型；application 不反向依赖 cli。
 - ScaleCommand 和 SetCommand 调用对象行为，不根据图形类型分派；各类内部的属性白名单判断属于自身校验职责。
-- DeleteCommand、FrontCommand、BackCommand 只调用文档行为；本轮叶子类新增各自的几何复制方法，原编辑算法不变。根级与容器内的列表分支依据父级位置，不是图形类型名称。
+- DeleteCommand、FrontCommand、BackCommand 只调用文档行为；第八轮叶子类新增各自的几何复制方法，第九轮未修改叶子类。根级与容器内的列表分支依据父级位置，不是图形类型名称。
 - GroupCommand、AddToCommand、UngroupCommand 依赖文档行为；group 直接创建其职责规定的 GroupShape，不新增类型名称分派。列表计划是私有操作中的临时数据，几何模型仍有封装行为。
 - EditCommand 统一组织会话编辑，HistoryEntry 封装快照，领域层不依赖 application。复制通过子类方法完成，不增加第三处名称分派。
-- Composite 与历史管理已实现；辅助命令和持久化尚未完成，因此这里只是前八个增量的一致性检查。
+- CanvasCommand 区分有参修改与无参查询，这是命令语义判断；HelpCommand 的静态帮助文本不是名称到实现的分派。画布复制留在领域层，历史边界留在会话层。
+- Composite、历史管理与辅助命令已实现；持久化尚未完成，因此这里只是前九个增量的一致性检查。
 
 # 质量保证手段
 
-执行 `npm test`：TypeScript 严格编译通过，Node 内置测试运行器 78/78 通过（第一轮 9 组，第二轮 5 组，第三轮 10 组，第四轮 10 组，第五轮 10 组，第六轮 10 组，第七轮 12 组，第八轮 12 组）。
+执行 `npm test`：TypeScript 严格编译通过，Node 内置测试运行器 86/86 通过（第一轮 9 组，第二轮 5 组，第三轮 10 组，第四轮 10 组，第五轮 10 组，第六轮 10 组，第七轮 12 组，第八轮 12 组，第九轮 8 组）。
 
 | 验证内容 | 结果 |
 | --- | --- |
@@ -280,12 +295,18 @@ box、动态插件框架和图形界面均不列入本期交付。
 | 无变化编辑计入历史，初始化阻断、解禁、空栈和非法历史参数 | 通过 |
 | 工作副本部分修改异常、后快照失败及 undo/redo 恢复失败均保留原实例和历史 | 通过 |
 | 第八轮真实 CLI 历史回放、init 后精确错误提示 | 通过 |
+| help 覆盖现有命令与六类创建语法、标注后续功能、初始化与参数错误 | 通过 |
+| help/canvas 查询保留当前实例和 redo、不入栈也不解除历史阻断 | 通过 |
+| canvas 单参保留当前高度、双参修改、全部几何/样式/层级/顺序保持 | 通过 |
+| 非正/非有限尺寸、参数错误及复制中途失败均保留原文档和历史 | 通过 |
+| 相同尺寸也清历史，新编辑只撤销至新画布基线、尺寸副本相互隔离 | 通过 |
+| 第九轮真实 CLI 回放、两条精确错误、失败修改后 redo 仍可用 | 通过 |
 | 交互终端 svg> 提示符和最小命令链 | AI 验证通过 |
 | 用户手动验收与关键代码讨论 | 待用户反馈 |
 
-功能测试文件为 tests/FirstIncrement.test.ts、tests/CircleIncrement.test.ts、tests/LeafShapesIncrement.test.ts、tests/CommandTokenizer.test.ts、tests/GroupIncrement.test.ts、tests/AttributeIncrement.test.ts、tests/TreeEditingIncrement.test.ts、tests/GroupingIncrement.test.ts 与 tests/HistoryIncrement.test.ts；回放脚本为 examples/step-01.commands.txt 至 examples/step-08.commands.txt。
+功能测试文件为 tests/FirstIncrement.test.ts、tests/CircleIncrement.test.ts、tests/LeafShapesIncrement.test.ts、tests/CommandTokenizer.test.ts、tests/GroupIncrement.test.ts、tests/AttributeIncrement.test.ts、tests/TreeEditingIncrement.test.ts、tests/GroupingIncrement.test.ts、tests/HistoryIncrement.test.ts 与 tests/CanvasHelpIncrement.test.ts；回放脚本为 examples/step-01.commands.txt 至 examples/step-09.commands.txt。
 一组测试可以覆盖多个边界用例；以上表格不表示每行均对应一个独立测试。
 
 本轮分词器的转义语法已明确，但保存/读取尚未实现；反斜杠文本测试不能代替未来真实文件路径验收。
-当前编辑与历史已测试失败不变；后续 canvas/read/save 仍须验证成功时清理历史、失败时文档和历史栈保持正确。
+当前编辑与历史已测试失败不变，canvas 已验证查询、成功修改及失败的历史边界；后续 read/save 仍须验证成功时清理历史、失败时文档和历史栈保持正确。
 用户手动体验与设计讨论独立记录，未实现功能不记为测试通过。
