@@ -41,6 +41,11 @@ export abstract class Shape {
     throw new Error(`not a container: ${this.id}`);
   }
 
+  /** @internal 仅供 SvgDocument 验证完整树后同步提交，不保存为历史。 */
+  prepareChildren(_children: readonly Shape[]): () => void {
+    throw new Error(`not a container: ${this.id}`);
+  }
+
   *walk(): IterableIterator<Shape> {
     yield this;
     for (const child of this.getChildren()) yield* child.walk();

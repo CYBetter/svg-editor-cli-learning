@@ -5,10 +5,10 @@
 
 ## 当前增量
 
-第一轮实现最小矩形编辑流程；第二轮增加圆形；第三轮增加椭圆、线段和文字；第四轮加入 g 容器；第五轮加入 scale、set、show；第六轮加入 delete、front、back。
-当前支持六种类型的创建、整棵子树的移动/缩放/删除、同级重排、属性修改和查询、输入校验和失败时保持状态。
-54 组自动测试通过。用户已要求继续推进，尚未反馈具体手动验收结果。
-其余编辑命令、撤销重做与 SVG 读写留到后续增量。
+第一轮实现最小矩形编辑流程；第二轮增加圆形；第三轮增加椭圆、线段和文字；第四轮加入 g 容器；第五轮加入 scale、set、show；第六轮加入 delete、front、back；第七轮加入 group、addto、ungroup。
+当前支持六种类型的创建、整棵子树的移动/缩放/删除、同级重排、分组与迁移、属性修改和查询、输入校验和失败时保持状态。
+66 组自动测试通过。用户已选择分组位置约定，尚未反馈具体手动验收结果。
+撤销重做、辅助命令与 SVG 读写留到后续增量。
 
 ## Git 迭代约定
 
@@ -227,7 +227,7 @@ tree 应只剩 `svg (800x600)`；show red 报 `error: no such shape: red`，随�
 这说明删除既摘除了子树，也清理了全部后代的 ID 索引。
 完整回放见 examples/step-06.commands.txt，包含一条预期错误、同级排序和后代 ID 复用。
 
-## 本轮阅读路径
+## 第六轮阅读路径
 
 1. [DeleteCommand.ts](src/application/commands/DeleteCommand.ts)：发起删除并返回摘要，不判断目标是叶子还是容器。
 2. [SvgDocument.ts](src/domain/SvgDocument.ts)：remove 先定位父级并收集子树，再摘离和清理索引；reorder 只调整同级顺序。
@@ -236,6 +236,52 @@ tree 应只剩 `svg (800x600)`；show red 报 `error: no such shape: red`，随�
 理解时重点区分两种数据：对象树负责“归属与顺序”，ID 索引负责“按名字找到对象”。
 删除必须更新二者；重排只改变顺序，不删除或重新登记 ID。
 摘离只解除子树根的 attached 标记，后代仍属于子树。领域测试验证可完整重新加入，但当前 CLI 尚未提供 undo。
+
+## 第七轮体验：把已有对象组成节点，再解组
+
+```text
+init
+create g scene
+create rect box 10 20 100 50 red in scene
+create text label 25 50 "开始" in scene
+create circle marker 200 50 10 blue in scene
+group node label box
+addto node marker
+tree scene
+```
+
+预期结果：
+
+```text
+g#scene
+└── g#node
+    ├── rect#box x=10 y=20 w=100 h=50 fill=red
+    ├── text#label (25,50) "开始"
+    └── circle#marker cx=200 cy=50 r=10 fill=blue
+```
+
+group 使用当前树顺序，所以参数写成 label box 后，组内仍为 box、label；addto 把 marker 追加到末尾。
+再执行 `ungroup node`，三个孩子按上述顺序原位提升到 scene，node 的 ID 被释放。
+`ungroup scene` 则按课设报 `error: cannot ungroup top-level container: scene`。
+完整回放见 examples/step-07.commands.txt，包括循环迁移和根级解组两条预期错误。
+
+用户本轮确认的分组约定：新组放在最近共同父容器中；同父级时占首个选中图形的位置。
+跨父级时，新组插在最早包含选中节点的分支之前，旧父容器即使变空也保留；孩子按原树的深度优先顺序进入新组。
+例如 scene 下的 left 含 a，right 含 b：`group pair b a` 得到 scene 下的 pair(a,b)、left、right，而不是根级 pair。
+group 至少需要两个不同对象，不能同时选择某容器及其后代。
+
+addto 可以迁移整棵子树，也可以把孩子移到原父级的末尾；不能把自己移入自己或把祖先移入后代。
+迁移与解组保留对象、坐标和显式属性，不把旧父级的样式复制给孩子；继承外观可能随父级改变，浏览器效果到保存阶段验收。
+分组不保证与所有未选中图形的交错绘制顺序完全相同，保留的是被选中对象之间的相对顺序。
+
+## 本轮阅读路径
+
+1. [GroupCommand.ts](src/application/commands/GroupCommand.ts)：保留命令意图，调用文档的分组行为。
+2. [SvgDocument.ts](src/domain/SvgDocument.ts)：group/addTo/ungroup 先修改局部列表副本；applyStructure 检查拟议的新树与预期节点集合，再统一提交。
+3. [GroupShape.ts](src/domain/GroupShape.ts)：内部 prepareChildren 准备私有列表副本，提交回调只替换列表。
+
+重点理解“准备与提交”：当多个父级都要改变时，不能先移走第一个对象，再检查最后一个对象是否存在。
+本轮只复制受影响的孩子数组；几何对象保留原身份，列表计划用完即丢，不充当撤销历史。
 
 ## 前几轮阅读回顾
 
@@ -264,8 +310,8 @@ tree 应只剩 `svg (800x600)`；show red 报 `error: no such shape: red`，随�
 | --- | --- | --- |
 | 1. 属性与几何编辑（已实现） | scale、set、show | 44 组测试通过；用户体验与代码讨论待反馈 |
 | 2A. 树结构删除与排序（已实现） | delete、front、back | 54 组测试通过；删除释放全部后代 ID，排序仅影响同级 |
-| 2B. 树结构分组与迁移（下一轮） | group、addto、ungroup | 正确迁移与保序；无环、无重复 id、失败不变 |
-| 3. 撤销与辅助命令 | undo/redo、help、canvas | 一条编辑一个撤销单元；新编辑清 redo；查询不入栈；init/canvas 修改后禁用历史 |
+| 2B. 树结构分组与迁移（已实现） | group、addto、ungroup | 66 组测试通过；采用用户选定的位置规则，失败保持状态 |
+| 3. 撤销与辅助命令（下一阶段） | undo/redo、help、canvas | 一条编辑一个撤销单元；新编辑清 redo；查询不入栈；init/canvas 修改后禁用历史 |
 | 4. SVG 持久化 | 先 save，再 read、补 id 与历史边界 | 浏览器可预览；支持范围内读写一致；失败不替换文档或改变历史 |
 | 5. 最终验收 | 全命令回放、架构检查、文档修订、final tag | 课设示例与边界测试通过，真实过程记录完整，远程代码与 tag 一致 |
 

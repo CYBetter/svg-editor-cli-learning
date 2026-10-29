@@ -1,7 +1,7 @@
 import { Shape } from './Shape';
 
 export class GroupShape extends Shape {
-  private readonly children: Shape[] = [];
+  private children: Shape[] = [];
 
   override get label(): string { return `g#${this.id}`; }
   override get isContainer(): boolean { return true; }
@@ -41,6 +41,12 @@ export class GroupShape extends Shape {
     const index = this.children.indexOf(shape);
     if (index < 0) throw new Error(`not a direct child: ${shape.id}`);
     return index;
+  }
+
+  /** @internal 全树约束由文档验证；准备副本后，回调只替换私有列表。 */
+  override prepareChildren(children: readonly Shape[]): () => void {
+    const next = [...children];
+    return () => { this.children = next; };
   }
 
   protected override prepareMove(dx: number, dy: number): () => void {

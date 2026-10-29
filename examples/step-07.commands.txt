@@ -1,0 +1,19 @@
+# 第七轮：分组、迁移、原位解组以及失败后保留状态
+init 800 600
+create g scene
+create rect box 10 20 100 50 red in scene
+create text label 25 50 "开始" in scene
+create circle marker 200 50 10 blue in scene
+# 即使参数颠倒，组内仍保持 box、label 的原树顺序
+group node label box
+tree scene
+addto node marker
+show marker
+# 不允许把祖先移入后代
+addto node scene
+tree scene
+ungroup node
+tree scene
+# 根级容器按课设禁止解组
+ungroup scene
+show box
