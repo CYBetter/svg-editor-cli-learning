@@ -18,6 +18,10 @@ export class CircleShape extends Shape {
 
   override get label(): string { return `circle#${this.id}`; }
 
+  protected override cloneGeometry(): CircleShape {
+    return new CircleShape(this.id, this.cx, this.cy, this.radius);
+  }
+
   protected override prepareMove(dx: number, dy: number): () => void {
     // 移动只改变圆心；同样先检查全部结果再修改。
     const nextCx = Numeric.finite(this.cx + dx, 'cx');

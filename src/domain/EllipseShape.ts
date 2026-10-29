@@ -20,6 +20,10 @@ export class EllipseShape extends Shape {
 
   override get label(): string { return `ellipse#${this.id}`; }
 
+  protected override cloneGeometry(): EllipseShape {
+    return new EllipseShape(this.id, this.cx, this.cy, this.rx, this.ry);
+  }
+
   protected override prepareMove(dx: number, dy: number): () => void {
     const nextCx = Numeric.finite(this.cx + dx, 'cx');
     const nextCy = Numeric.finite(this.cy + dy, 'cy');

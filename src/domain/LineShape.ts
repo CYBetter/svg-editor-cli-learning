@@ -20,6 +20,10 @@ export class LineShape extends Shape {
 
   override get label(): string { return `line#${this.id}`; }
 
+  protected override cloneGeometry(): LineShape {
+    return new LineShape(this.id, this.x1, this.y1, this.x2, this.y2);
+  }
+
   protected override prepareMove(dx: number, dy: number): () => void {
     // 两个端点共四个坐标，全部计算成功后再一起更新。
     const nextX1 = Numeric.finite(this.x1 + dx, 'x1');

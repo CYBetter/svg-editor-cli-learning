@@ -5,10 +5,10 @@
 
 ## 当前增量
 
-第一轮实现最小矩形编辑流程；第二轮增加圆形；第三轮增加椭圆、线段和文字；第四轮加入 g 容器；第五轮加入 scale、set、show；第六轮加入 delete、front、back；第七轮加入 group、addto、ungroup。
-当前支持六种类型的创建、整棵子树的移动/缩放/删除、同级重排、分组与迁移、属性修改和查询、输入校验和失败时保持状态。
-66 组自动测试通过。用户已选择分组位置约定，尚未反馈具体手动验收结果。
-撤销重做、辅助命令与 SVG 读写留到后续增量。
+第一轮实现最小矩形编辑流程；第二轮增加圆形；第三轮增加椭圆、线段和文字；第四轮加入 g 容器；第五轮加入 scale、set、show；第六轮加入 delete、front、back；第七轮加入 group、addto、ungroup；第八轮加入 undo/redo。
+当前支持六种类型的创建、移动/缩放/删除、同级重排、分组迁移、属性修改和查询，以及全部十类编辑命令的撤销重做。
+78 组自动测试通过。用户已选择分组位置与文档快照方案，尚未反馈具体手动验收结果。
+help/canvas 和 SVG 读写留到后续增量。
 
 ## Git 迭代约定
 
@@ -235,7 +235,7 @@ tree 应只剩 `svg (800x600)`；show red 报 `error: no such shape: red`，随�
 
 理解时重点区分两种数据：对象树负责“归属与顺序”，ID 索引负责“按名字找到对象”。
 删除必须更新二者；重排只改变顺序，不删除或重新登记 ID。
-摘离只解除子树根的 attached 标记，后代仍属于子树。领域测试验证可完整重新加入，但当前 CLI 尚未提供 undo。
+摘离只解除子树根的 attached 标记，后代仍属于子树。第六轮领域测试验证可完整重新加入，第八轮已通过会话快照接入 undo。
 
 ## 第七轮体验：把已有对象组成节点，再解组
 
@@ -274,14 +274,57 @@ addto 可以迁移整棵子树，也可以把孩子移到原父级的末尾；�
 迁移与解组保留对象、坐标和显式属性，不把旧父级的样式复制给孩子；继承外观可能随父级改变，浏览器效果到保存阶段验收。
 分组不保证与所有未选中图形的交错绘制顺序完全相同，保留的是被选中对象之间的相对顺序。
 
-## 本轮阅读路径
+## 第七轮阅读路径
 
 1. [GroupCommand.ts](src/application/commands/GroupCommand.ts)：保留命令意图，调用文档的分组行为。
 2. [SvgDocument.ts](src/domain/SvgDocument.ts)：group/addTo/ungroup 先修改局部列表副本；applyStructure 检查拟议的新树与预期节点集合，再统一提交。
 3. [GroupShape.ts](src/domain/GroupShape.ts)：内部 prepareChildren 准备私有列表副本，提交回调只替换列表。
 
 重点理解“准备与提交”：当多个父级都要改变时，不能先移走第一个对象，再检查最后一个对象是否存在。
-本轮只复制受影响的孩子数组；几何对象保留原身份，列表计划用完即丢，不充当撤销历史。
+这部分领域结构操作只复制受影响的孩子数组，内部图形对象保留身份，列表计划用完即丢。
+第八轮会话会在完整文档副本上执行编辑，因此不能跨命令缓存原图形对象引用，应按 ID 重新查找。
+
+## 第八轮体验：撤销整组移动与删除
+
+```text
+init
+create g node
+create rect box 10 20 100 50 red in node
+create text label 25 50 "开始" in node
+move node 30 10
+undo
+tree node
+redo
+delete node
+undo
+tree node
+```
+
+第一次 tree 应显示 box 在 (10,20)、label 在 (25,50)；最后一次 tree 应显示 box 在 (40,30)、label 在 (55,60)。
+移动整个组只占一个撤销单元，删除整个组也只占一个单元，恢复时同时还原孩子、父级、顺序和 ID 索引。
+成功反馈使用 `undone: <原编辑摘要>` / `redone: <原编辑摘要>`，表示该操作已撤销或重做。
+
+历史规则：
+
+- tree/show、空行、注释及失败操作不记录历史，也不清空 redo。
+- undo 后成功执行新编辑会清空 redo。`move box 0 0` 等无实际变化的成功编辑也算一个单元。
+- 成功 init 清空历史，并使 undo/redo 都报 `error: undo not allowed after io command`；下一次成功编辑重新解禁。
+- 解禁后没有可撤销/重做内容，分别报 `error: nothing to undo` / `error: nothing to redo`。
+- read/save/canvas 的历史边界会在对应命令加入时验证，本轮只完成 init 边界。
+
+完整回放见 examples/step-08.commands.txt，包含三条预期错误及历史分支验证。
+
+## 本轮阅读路径与取舍
+
+1. [EditCommand.ts](src/application/commands/EditCommand.ts)：统一执行入口，十类编辑都经 session.edit 执行，调用者无需额外记录历史。
+2. [EditorSession.ts](src/application/EditorSession.ts)：在工作副本执行，快照完成后提交；维护 undo/redo 两个栈及 init 边界。
+3. [HistoryEntry.ts](src/application/HistoryEntry.ts)：私有保存前后文档副本，每次恢复再复制，防止当前编辑污染历史。
+
+用户选择了文档快照：每个图形通过自己的 cloneGeometry 复制私有几何值，Shape 复制显式样式，GroupShape 递归复制孩子，文档重建索引。
+这保留具体类的方法，也保留“样式未指定”与“显式设置”的区别；不通过 JSON 把模型变成普通数据袋。
+删除和分组因此不用分别编写反向操作，数值缩放造成的浮点损失也不会影响撤销恢复。
+代价是每个历史条目保存两份文档，内存随图形数量和编辑次数增长；目前不设截断条数，适用于本课设的小型图形文档。
+会话每次成功编辑、undo、redo 都替换当前文档；失败保持原文档实例和历史。外部调用方应按 ID 重新取得对象。
 
 ## 前几轮阅读回顾
 
@@ -311,7 +354,8 @@ addto 可以迁移整棵子树，也可以把孩子移到原父级的末尾；�
 | 1. 属性与几何编辑（已实现） | scale、set、show | 44 组测试通过；用户体验与代码讨论待反馈 |
 | 2A. 树结构删除与排序（已实现） | delete、front、back | 54 组测试通过；删除释放全部后代 ID，排序仅影响同级 |
 | 2B. 树结构分组与迁移（已实现） | group、addto、ungroup | 66 组测试通过；采用用户选定的位置规则，失败保持状态 |
-| 3. 撤销与辅助命令（下一阶段） | undo/redo、help、canvas | 一条编辑一个撤销单元；新编辑清 redo；查询不入栈；init/canvas 修改后禁用历史 |
+| 3A. 撤销重做（已实现） | undo、redo、init 历史边界 | 78 组测试通过；用户选定快照，一条编辑一个历史单元 |
+| 3B. 辅助命令（下一轮） | help、canvas | 帮助覆盖现有语法；canvas 查询不入栈，成功修改尺寸清历史，失败保留状态 |
 | 4. SVG 持久化 | 先 save，再 read、补 id 与历史边界 | 浏览器可预览；支持范围内读写一致；失败不替换文档或改变历史 |
 | 5. 最终验收 | 全命令回放、架构检查、文档修订、final tag | 课设示例与边界测试通过，真实过程记录完整，远程代码与 tag 一致 |
 

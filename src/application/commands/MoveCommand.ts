@@ -1,8 +1,8 @@
 import { Numeric } from '../../domain/Numeric';
-import { EditorSession } from '../EditorSession';
-import { Command } from './Command';
+import { SvgDocument } from '../../domain/SvgDocument';
+import { EditCommand } from './EditCommand';
 
-export class MoveCommand extends Command {
+export class MoveCommand extends EditCommand {
   private readonly id: string;
   private readonly dx: number;
   private readonly dy: number;
@@ -15,8 +15,8 @@ export class MoveCommand extends Command {
     this.dy = Numeric.parse(args[2], 'dy');
   }
 
-  override execute(session: EditorSession): string {
-    const shape = session.document.find(this.id);
+  protected override apply(document: SvgDocument): string {
+    const shape = document.find(this.id);
     shape.move(this.dx, this.dy);
     return `moved ${shape.describe()}`;
   }

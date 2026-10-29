@@ -13,6 +13,12 @@ export class SvgDocument {
 
   get size(): string { return `${this.width}x${this.height}`; }
 
+  clone(): SvgDocument {
+    const copy = new SvgDocument(this.width, this.height);
+    for (const root of this.roots) copy.add(root.clone());
+    return copy;
+  }
+
   add(shape: Shape, containerId?: string): void {
     const parent = containerId === undefined ? undefined : this.findContainer(containerId);
     const incoming = [...shape.walk()];

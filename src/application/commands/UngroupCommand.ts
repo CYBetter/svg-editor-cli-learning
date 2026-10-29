@@ -1,7 +1,7 @@
-import { EditorSession } from '../EditorSession';
-import { Command } from './Command';
+import { SvgDocument } from '../../domain/SvgDocument';
+import { EditCommand } from './EditCommand';
 
-export class UngroupCommand extends Command {
+export class UngroupCommand extends EditCommand {
   private readonly id: string;
 
   constructor(args: readonly string[]) {
@@ -10,8 +10,8 @@ export class UngroupCommand extends Command {
     this.id = args[0];
   }
 
-  override execute(session: EditorSession): string {
-    const group = session.document.ungroup(this.id);
+  protected override apply(document: SvgDocument): string {
+    const group = document.ungroup(this.id);
     return `${group.label} ungrouped`;
   }
 }

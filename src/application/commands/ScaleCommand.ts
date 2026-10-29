@@ -1,8 +1,8 @@
 import { Numeric } from '../../domain/Numeric';
-import { EditorSession } from '../EditorSession';
-import { Command } from './Command';
+import { SvgDocument } from '../../domain/SvgDocument';
+import { EditCommand } from './EditCommand';
 
-export class ScaleCommand extends Command {
+export class ScaleCommand extends EditCommand {
   private readonly id: string;
   private readonly factor: number;
 
@@ -13,8 +13,8 @@ export class ScaleCommand extends Command {
     this.factor = Numeric.parse(args[1], 'scale factor');
   }
 
-  override execute(session: EditorSession): string {
-    const shape = session.document.find(this.id);
+  protected override apply(document: SvgDocument): string {
+    const shape = document.find(this.id);
     shape.scale(this.factor);
     return `${shape.label} scaled by ${this.factor}`;
   }

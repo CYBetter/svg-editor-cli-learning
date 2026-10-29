@@ -20,6 +20,10 @@ export class RectShape extends Shape {
 
   override get label(): string { return `rect#${this.id}`; }
 
+  protected override cloneGeometry(): RectShape {
+    return new RectShape(this.id, this.x, this.y, this.width, this.height);
+  }
+
   protected override prepareMove(dx: number, dy: number): () => void {
     // 先验证全部结果，再提交修改，避免只移动了一个坐标。
     const nextX = Numeric.finite(this.x + dx, 'x');

@@ -1,7 +1,7 @@
-import { EditorSession } from '../EditorSession';
-import { Command } from './Command';
+import { SvgDocument } from '../../domain/SvgDocument';
+import { EditCommand } from './EditCommand';
 
-export class FrontCommand extends Command {
+export class FrontCommand extends EditCommand {
   private readonly id: string;
 
   constructor(args: readonly string[]) {
@@ -10,8 +10,8 @@ export class FrontCommand extends Command {
     this.id = args[0];
   }
 
-  override execute(session: EditorSession): string {
-    const shape = session.document.bringToFront(this.id);
+  protected override apply(document: SvgDocument): string {
+    const shape = document.bringToFront(this.id);
     return `${shape.label} brought to front`;
   }
 }

@@ -1,7 +1,7 @@
-import { EditorSession } from '../EditorSession';
-import { Command } from './Command';
+import { SvgDocument } from '../../domain/SvgDocument';
+import { EditCommand } from './EditCommand';
 
-export class GroupCommand extends Command {
+export class GroupCommand extends EditCommand {
   private readonly id: string;
   private readonly members: readonly string[];
 
@@ -12,8 +12,8 @@ export class GroupCommand extends Command {
     this.members = args.slice(1);
   }
 
-  override execute(session: EditorSession): string {
-    const group = session.document.group(this.id, this.members);
+  protected override apply(document: SvgDocument): string {
+    const group = document.group(this.id, this.members);
     return `${group.label} created with ${group.getChildren().length} children`;
   }
 }

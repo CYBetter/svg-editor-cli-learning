@@ -1,7 +1,7 @@
-import { EditorSession } from '../EditorSession';
-import { Command } from './Command';
+import { SvgDocument } from '../../domain/SvgDocument';
+import { EditCommand } from './EditCommand';
 
-export class AddToCommand extends Command {
+export class AddToCommand extends EditCommand {
   private readonly containerId: string;
   private readonly id: string;
 
@@ -11,8 +11,8 @@ export class AddToCommand extends Command {
     [this.containerId, this.id] = args;
   }
 
-  override execute(session: EditorSession): string {
-    const shape = session.document.addTo(this.containerId, this.id);
-    return `${shape.label} moved into ${session.document.find(this.containerId).label}`;
+  protected override apply(document: SvgDocument): string {
+    const shape = document.addTo(this.containerId, this.id);
+    return `${shape.label} moved into ${document.find(this.containerId).label}`;
   }
 }

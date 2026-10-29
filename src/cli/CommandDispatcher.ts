@@ -8,10 +8,12 @@ import { FrontCommand } from '../application/commands/FrontCommand';
 import { GroupCommand } from '../application/commands/GroupCommand';
 import { InitCommand } from '../application/commands/InitCommand';
 import { MoveCommand } from '../application/commands/MoveCommand';
+import { RedoCommand } from '../application/commands/RedoCommand';
 import { ScaleCommand } from '../application/commands/ScaleCommand';
 import { SetCommand } from '../application/commands/SetCommand';
 import { ShowCommand } from '../application/commands/ShowCommand';
 import { TreeCommand } from '../application/commands/TreeCommand';
+import { UndoCommand } from '../application/commands/UndoCommand';
 import { UngroupCommand } from '../application/commands/UngroupCommand';
 import { CommandTokenizer } from './CommandTokenizer';
 
@@ -23,6 +25,7 @@ export class CommandDispatcher {
     ['scale', ScaleCommand], ['set', SetCommand], ['show', ShowCommand],
     ['delete', DeleteCommand], ['front', FrontCommand], ['back', BackCommand],
     ['group', GroupCommand], ['addto', AddToCommand], ['ungroup', UngroupCommand],
+    ['undo', UndoCommand], ['redo', RedoCommand],
   ]);
 
   parse(line: string): Command | undefined {

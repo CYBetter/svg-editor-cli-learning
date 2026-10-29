@@ -6,6 +6,17 @@ export class GroupShape extends Shape {
   override get label(): string { return `g#${this.id}`; }
   override get isContainer(): boolean { return true; }
 
+  protected override cloneGeometry(): GroupShape {
+    const copy = new GroupShape(this.id);
+    // 原树已有效；按原顺序递归复制并重建归属，不共享孩子数组或对象。
+    copy.children = this.children.map(child => {
+      const cloned = child.clone();
+      cloned.markAttached();
+      return cloned;
+    });
+    return copy;
+  }
+
   override getChildren(): readonly Shape[] {
     return Object.freeze([...this.children]);
   }

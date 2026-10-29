@@ -1,9 +1,9 @@
 import { ShapeFactory } from '../../domain/ShapeFactory';
 import { CommandToken } from '../CommandToken';
-import { EditorSession } from '../EditorSession';
-import { Command } from './Command';
+import { SvgDocument } from '../../domain/SvgDocument';
+import { EditCommand } from './EditCommand';
 
-export class CreateCommand extends Command {
+export class CreateCommand extends EditCommand {
   private readonly type: string;
   private readonly id: string;
   private readonly params: readonly string[];
@@ -22,8 +22,7 @@ export class CreateCommand extends Command {
     }
   }
 
-  override execute(session: EditorSession): string {
-    const document = session.document;
+  protected override apply(document: SvgDocument): string {
     const shape = new ShapeFactory().create(this.type, this.id, this.params);
     document.add(shape, this.containerId);
     const parent = this.containerId === undefined ? '' : ` in ${document.find(this.containerId).label}`;

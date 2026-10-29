@@ -51,6 +51,14 @@ export abstract class Shape {
     for (const child of this.getChildren()) yield* child.walk();
   }
 
+  clone(): Shape {
+    const copy = this.cloneGeometry();
+    for (const [name, value] of this.styles) copy.styles.set(name, value);
+    return copy;
+  }
+
+  protected abstract cloneGeometry(): Shape;
+
   move(dx: number, dy: number): void {
     Numeric.finite(dx, 'dx');
     Numeric.finite(dy, 'dy');

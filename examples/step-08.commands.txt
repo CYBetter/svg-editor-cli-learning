@@ -1,0 +1,24 @@
+# 第八轮：一条编辑一个历史单元，查询不入栈
+init
+undo
+create g scene
+create rect box 10 20 100 50 red in scene
+create text label 25 50 "开始" in scene
+group node box label
+move node 30 10
+undo
+show box
+redo
+set label text "处理数据 v2"
+undo
+show label
+delete node
+undo
+tree scene
+undo
+# 成功的无变化编辑也算新编辑，清空 redo
+front node
+redo
+init 400 300
+undo
+tree

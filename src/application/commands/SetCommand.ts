@@ -1,7 +1,7 @@
-import { EditorSession } from '../EditorSession';
-import { Command } from './Command';
+import { SvgDocument } from '../../domain/SvgDocument';
+import { EditCommand } from './EditCommand';
 
-export class SetCommand extends Command {
+export class SetCommand extends EditCommand {
   private readonly id: string;
   private readonly attribute: string;
   private readonly value: string;
@@ -12,8 +12,8 @@ export class SetCommand extends Command {
     [this.id, this.attribute, this.value] = args;
   }
 
-  override execute(session: EditorSession): string {
-    const shape = session.document.find(this.id);
+  protected override apply(document: SvgDocument): string {
+    const shape = document.find(this.id);
     shape.setAttribute(this.attribute, this.value);
     const value = this.attribute === 'text' ? JSON.stringify(this.value) : this.value;
     return `${shape.label} updated: ${this.attribute}=${value}`;

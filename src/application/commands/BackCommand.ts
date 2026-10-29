@@ -1,7 +1,7 @@
-import { EditorSession } from '../EditorSession';
-import { Command } from './Command';
+import { SvgDocument } from '../../domain/SvgDocument';
+import { EditCommand } from './EditCommand';
 
-export class BackCommand extends Command {
+export class BackCommand extends EditCommand {
   private readonly id: string;
 
   constructor(args: readonly string[]) {
@@ -10,8 +10,8 @@ export class BackCommand extends Command {
     this.id = args[0];
   }
 
-  override execute(session: EditorSession): string {
-    const shape = session.document.sendToBack(this.id);
+  protected override apply(document: SvgDocument): string {
+    const shape = document.sendToBack(this.id);
     return `${shape.label} sent to back`;
   }
 }

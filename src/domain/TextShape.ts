@@ -15,6 +15,10 @@ export class TextShape extends Shape {
 
   override get label(): string { return `text#${this.id}`; }
 
+  protected override cloneGeometry(): TextShape {
+    return new TextShape(this.id, this.x, this.y, this.content);
+  }
+
   protected override prepareMove(dx: number, dy: number): () => void {
     const nextX = Numeric.finite(this.x + dx, 'x');
     const nextY = Numeric.finite(this.y + dy, 'y');
