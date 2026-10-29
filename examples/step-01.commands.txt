@@ -1,0 +1,10 @@
+# 第一轮：初始化、创建矩形、显示、移动
+init 800 600
+create rect r1 10 20 100 50
+tree
+move r1 30 10
+tree
+# 这两条命令应失败，最后的 tree 应保持上次结果
+create rect r1 0 0 20 20
+move missing 5 5
+tree
