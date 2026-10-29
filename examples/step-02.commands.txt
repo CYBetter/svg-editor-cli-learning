@@ -1,0 +1,10 @@
+# 第二轮：同一个 move 命令分别操作矩形和圆形
+init 800 600
+create rect r1 10 20 100 50
+create circle c1 100 100 20 red
+move r1 30 10
+move c1 30 10
+tree
+# id 在所有类型之间也必须唯一
+create circle r1 0 0 10
+tree
