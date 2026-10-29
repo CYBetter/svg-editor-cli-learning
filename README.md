@@ -5,10 +5,17 @@
 
 ## 当前增量
 
-第一轮实现最小矩形编辑流程；第二轮增加 circle，验证原有命令通过多态支持新图形。
-当前支持根级矩形和圆形、可选 fill、tree id、输入校验和失败时保持状态。
-14 组自动测试通过。用户已要求继续推进，尚未反馈具体手动验收结果。
-其余图形、in 子句、容器、其他命令、撤销重做与 SVG 读写留到后续增量。
+第一轮实现最小矩形编辑流程；第二轮增加圆形；第三轮增加椭圆、线段和文字。
+当前支持五类根级叶子图形的 create / move / tree、输入校验和失败时保持状态。
+24 组自动测试通过。用户已要求继续推进，尚未反馈具体手动验收结果。
+g 容器、in 子句、其他编辑命令、撤销重做与 SVG 读写留到后续增量。
+
+## Git 迭代约定
+
+每轮功能更新验证通过后，将代码、相关测试和真实过程记录一起提交，并推送到 origin/main。
+每轮结束报告提交号与推送结果；网络失败时如实报告，未推送不表述为已同步。
+既有提交保留，不把完成品重新拆分成虚构的开发历史。完整验收后才创建 final tag。
+可用 `git log --oneline --decorate` 查看实际记录。
 
 ## 环境
 
@@ -74,24 +81,64 @@ svg (800x600)
 再执行 `create circle r1 0 0 10`，会报 id 已存在：id 唯一性跨越图形类型。
 本轮回放脚本为 `examples/step-02.commands.txt`，可按第一轮相同方式运行。
 
+## 第三轮体验：不同几何结构，共用移动行为
+
+```text
+init 800 600
+create ellipse e1 100 100 40 20 #88ccff
+create line edge 10 20 100 20 black
+create text title 20 40 "开始处理 My Diagram"
+move e1 10 5
+move edge 10 5
+move title 10 5
+tree
+```
+
+预期结果：
+
+```text
+svg (800x600)
+├── ellipse#e1 cx=110 cy=105 rx=40 ry=20 fill=#88ccff
+├── line#edge (20,25) -> (110,25) stroke=black
+└── text#title (30,45) "开始处理 My Diagram"
+```
+
+椭圆的可选颜色是 fill，线段的是 stroke；省略时都保持未指定。
+文字内容是独立字段，移动只改变位置。
+脚本保存在 examples/step-03.commands.txt，自动测试通过 UTF-8 直接回放真实 CLI。
+手动体验建议直接在 CLI 中输入；旧版 Windows PowerShell 管道默认编码可能损坏中文。
+
+## 文字参数与引号
+
+```text
+create text quoted 0 0 "他说：\"开始\""
+create text empty 0 20 ""
+```
+
+双引号包裹带空格参数是任务书要求。字面引号的转义是本实现新增的语法约定：
+引号前每两个反斜杠生成一个反斜杠；若还剩一个，则该引号作为文字内容，否则切换包裹状态。
+其他位置的反斜杠原样保留，不把反斜杠加 n/t 当成换行或制表符。
+例如带引号的 Windows 路径如以反斜杠结尾，结束引号前应输入两个反斜杠。
+文字在 tree 中使用 JSON 风格的引号与转义显示，便于识别内容边界。
+
 ## 本轮阅读路径
 
-1. [CircleShape.ts](src/domain/CircleShape.ts)：继承 Shape，实现圆心移动和圆形描述。
-2. [MoveCommand.ts](src/application/commands/MoveCommand.ts)：保持第一轮代码，调用 shape.move，不判断矩形还是圆形。
-3. [ShapeFactory.ts](src/domain/ShapeFactory.ts)：只有创建对象时需要根据类型名选择具体类。
+1. [LineShape.ts](src/domain/LineShape.ts)：一次移动要更新两个端点，先检查四个新坐标，再一起赋值。
+2. [TextShape.ts](src/domain/TextShape.ts)：移动位置时保留文本，描述中正确显示引号。
+3. [EllipseShape.ts](src/domain/EllipseShape.ts)：移动圆心，保留两个半径。
 
-矩形仍由 [RectShape.ts](src/domain/RectShape.ts) 负责自身几何行为。
-[SvgDocument.ts](src/domain/SvgDocument.ts) 以 Shape 类型保存两类对象，统一检查 id 唯一性。
+[MoveCommand.ts](src/application/commands/MoveCommand.ts) 仍然调用 shape.move，不读取具体几何字段。
+[ShapeFactory.ts](src/domain/ShapeFactory.ts) 集中根据类型名创建对象；这是任务书允许且标注待重构的分派点。
+[SvgDocument.ts](src/domain/SvgDocument.ts) 以 Shape 类型保存五类对象，统一检查 id 唯一性。
 
 构造函数中的 `private x: number` 是 TypeScript 参数属性：同时声明字段并用参数初始化。
 `override` 标明实现或重写了父类的成员。
 
-本轮已验证：新增圆形后，CreateCommand、MoveCommand、TreeCommand 和 SvgDocument 均未修改。
-这就是多态的具体收益：调用方依赖统一行为，具体对象实现自己的几何细节。
-同时，工厂仍需要新增类型分支；它是任务书允许保留的集中分派点，不等于动态插件已经实现。
+从矩形扩展到五类叶子后，CreateCommand、MoveCommand、TreeCommand 和 SvgDocument 均未修改。
+这验证了统一行为接口的价值，也说明几何字段不必相同。
 
-设计取舍：两种图形的移动实现有少量相似代码，当前保留在各自类中。
-不急于增加“统一位置”基类，因为后续线段有两个端点，容器则要移动孩子，位置模型并不相同。
+设计取舍：各类的移动实现有少量相似代码，当前保留在各自类中。
+本轮的线段有两个端点，下一轮的容器则要移动孩子，因此不为少量重复增加“统一位置”基类。
 
 独立远程仓库：https://github.com/CYBetter/svg-editor-cli-learning
 

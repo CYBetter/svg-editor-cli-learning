@@ -1,0 +1,14 @@
+# 第三轮：椭圆、线段、中文文字都使用同一个 move 命令
+init 800 600
+create ellipse e1 100 100 40 20 #88ccff
+create line edge 10 20 100 20 black
+create text title 20 40 "开始处理 My Diagram"
+move e1 10 5
+move edge 10 5
+move title 10 5
+tree
+# 文字中的引号与空文本
+create text quoted 0 0 "他说：\"开始\""
+create text empty 0 20 ""
+tree quoted
+tree empty

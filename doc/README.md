@@ -2,15 +2,15 @@
 
 ## 本轮边界
 
-第一轮实现 init、create rect、tree（含 tree id）、move；第二轮增加 create circle 并复用原命令。
-create 的 in 子句、其他四种图形、其他编辑命令、撤销重做和文件读写在后续增量实现。
+第一轮实现 init、create rect、tree（含 tree id）、move；第二轮增加 circle；第三轮增加 ellipse、line、text。
+五类叶子的创建、移动和查询复用原命令；g 容器、in 子句、其他编辑命令、撤销重做和文件读写在后续增量实现。
 当前不是完整的 Phase 1 提交版本；不创建 final tag。
 
 ## 模块职责与依赖
 
 | 目录 | 职责 | 允许依赖 |
 | --- | --- | --- |
-| src/domain | Shape、RectShape、CircleShape、SvgDocument；封装几何行为、唯一 id 和查找 | 本模块、语言标准库 |
+| src/domain | Shape、五类叶子图形、SvgDocument；封装几何行为、唯一 id 和查找 | 本模块、语言标准库 |
 | src/application | 当前文档会话、Command 与具体命令；组织一次操作 | domain、本模块 |
 | src/cli | 分词、唯一命令分派入口、终端读写和错误显示 | application，本模块 |
 | src/Main.ts | 组装并启动应用 | cli、application |
@@ -34,7 +34,7 @@ application --> domain
 ## 设计模式
 
 - Command（任务书要求）：InitCommand、CreateCommand、MoveCommand、TreeCommand 实现相同 execute 契约。CLI 统一执行命令，不包揽业务。
-- 多态与封装：Shape 定义行为，RectShape/CircleShape 各自实现几何变化；文档保存 Shape，MoveCommand 不判断图形类型。
+- 多态与封装：Shape 定义行为，RectShape/CircleShape/EllipseShape/LineShape/TextShape 各自实现几何变化；文档保存 Shape，MoveCommand 不判断图形类型。
 - Composite：后续容器增量再实现，并用嵌套组移动验证。当前不能声称已实现 Composite。
 - 仅两处名称分派：CommandDispatcher（命令名 → 命令类）与 ShapeFactory（类型名 → 图形类）。两处均标注待重构为注册入口；本轮不制作动态插件框架。
 
@@ -49,10 +49,18 @@ application --> domain
 ## 本轮具体约定
 
 - init 无参数为 800×600，单参数只改变宽；画布尺寸必须是有限正数。
-- 几何坐标允许负数和小数；矩形宽高与圆形半径为有限非负数，允许零尺寸。几何尺寸非负是本实现的校验约定。
+- 几何坐标允许负数和小数；矩形宽高、圆形半径、椭圆两条半径为有限非负数，允许零尺寸。几何尺寸非负是本实现的校验约定。
 - 移动先计算并检查全部新坐标，再统一赋值，避免一项成功一项失败。
-- fill 省略时保持未指定，不擅自填成 black。
+- fill / stroke 省略时保持未指定；线段的可选样式是 stroke。
 - 空行和 # 开头的整行注释跳过，颜色参数中的 # 作为普通文本。
+- text 内容支持中文、空格、空字符串及转义引号；移动不改变文本。
+- 双引号分组是任务书要求；引号前的反斜杠奇偶转义为本实现约定：2n 个反斜杠产生 n 个并切换引号状态，2n+1 个产生 n 个及字面引号。其他位置反斜杠原样保留。
+
+## Git 记录规则
+
+根据用户明确要求，每轮有效更新在验证后形成提交，并推送到独立远程仓库。
+提交包含对应代码、测试和文档修订；每轮报告实际提交号与同步状态。
+不改写已有提交来伪造学习过程，用户手动验收和观点仅按其实际反馈记录。
 
 # 过程记录
 
@@ -84,20 +92,32 @@ application --> domain
 - 新增 5 组测试，与原来 9 组共同通过；独立只读复核未发现本轮需要修复的问题。
 - 待讨论：统一 move 接口为什么足够，而统一 x/y 字段未必适用于所有图形。等待用户实际阅读与反馈后记录其观点。
 
+## 2026-10-29：五类叶子图形与文字输入
+
+- 用户要求继续，并明确每次更新都需要 Git 提交和远程仓库记录。本轮将该约定写入 README 与本文件。
+- 本轮新增椭圆、线段、文字，仍只提供创建、移动和查询，没有推进容器、撤销与文件读写。
+- 线段用两个端点检验上一轮的取舍：MoveCommand 只依赖 move 行为，不需要假设图形有单一 x/y。
+- 三个新类分别封装自身几何值；线段同时校验四个新坐标，第四个坐标溢出时前面三个也不修改。
+- 文字沿用双引号参数分组；为表达内容中的双引号，补充仅作用于引号前的反斜杠奇偶规则。普通反斜杠和 UNC 文本保持原样。这是实现语法选择，任务书没有规定具体转义语法。
+- 首次编译发现 AI 编写的测试误用了 assert.throws 重载，将 undefined 放入必需的断言谓词位置。改用其消息参数重载后，严格编译通过；这说明测试代码本身也需要类型检查。
+- 新增 10 组测试（7 组新图形与 CLI 测试，3 组分词测试），与原有 14 组共同通过。
+- 独立只读复核检查线段原子性、文字转义和名称分派位置，未发现本轮需要修复的问题。
+- 用户目前的参与是确定推进节奏和 Git 要求；本轮具体代码理解、运行体验与意见尚待反馈，不预先写成已完成。
+
 # 一致性自查
 
-当前实现与三层方案一致，src 下 16 个类各自放在同名文件。
+当前实现与三层方案一致，src 下 19 个类各自放在同名文件。
 
 - 抽查 MoveCommand：只依赖 application 与 domain，调用 shape.move，不直接修改几何字段。
-- 抽查 RectShape、CircleShape、SvgDocument：只依赖 domain，没有 Node、终端或文件 IO 依赖。
+- 抽查五类图形及 SvgDocument：只依赖 domain，没有 Node、终端或文件 IO 依赖。
 - CommandDispatcher 依赖 application，集中处理命令名称；ShapeFactory 集中处理图形类型名称。代码中两处都有待重构说明。
 - CommandTokenizer 和 Numeric 分别放在 cli 与 domain，是各自职责的辅助类，不增加反向依赖。
-- 圆形增量沿用原命令与文档管理逻辑，没有新增分散的图形类型判断。
-- Composite、历史管理和持久化尚未实现；因此这里只是前两个增量的一致性检查。
+- 五类叶子增量沿用原命令与文档管理逻辑，没有新增分散的图形类型判断。
+- Composite、历史管理和持久化尚未实现；因此这里只是前三个增量的一致性检查。
 
 # 质量保证手段
 
-执行 `npm test`：TypeScript 严格编译通过，Node 内置测试运行器 14/14 通过（原有 9 组，新增 5 组）。
+执行 `npm test`：TypeScript 严格编译通过，Node 内置测试运行器 24/24 通过（第一轮 9 组，第二轮 5 组，第三轮 10 组）。
 
 | 验证内容 | 结果 |
 | --- | --- |
@@ -112,12 +132,17 @@ application --> domain
 | 矩形和圆形使用相同命令入口、跨类型 id 唯一性 | 通过 |
 | 圆心移动、半径保留、零/负半径约定、坐标溢出 | 通过 |
 | 第二轮真实 CLI 混合图形回放 | 通过 |
+| 椭圆圆心平移与半径保留，线段两端一起移动 | 通过 |
+| 线段第四坐标溢出时全部坐标保留 | 通过 |
+| 中文、空文本、带空格内容与字面引号 | 通过 |
+| 引号前反斜杠奇偶规则、普通反斜杠与 UNC 文本 | 通过 |
+| 五类图形共享 id、第三轮真实 CLI 脚本 | 通过 |
 | 交互终端 svg> 提示符和最小命令链 | AI 验证通过 |
 | 用户手动验收与关键代码讨论 | 待用户反馈 |
 
-功能测试文件为 tests/FirstIncrement.test.ts 与 tests/CircleIncrement.test.ts，回放脚本为 examples/step-01.commands.txt 与 examples/step-02.commands.txt。
+功能测试文件为 tests/FirstIncrement.test.ts、tests/CircleIncrement.test.ts、tests/LeafShapesIncrement.test.ts 与 tests/CommandTokenizer.test.ts；回放脚本为 examples/step-01.commands.txt 至 examples/step-03.commands.txt。
 一组测试可以覆盖多个边界用例；以上表格不表示每行均对应一个独立测试。
 
-本轮分词器支持双引号包裹参数，尚未定义引号转义语法。引入 text、文件路径时再评审其需求。
+本轮分词器的转义语法已明确，但保存/读取尚未实现；反斜杠文本测试不能代替未来真实文件路径验收。
 当前只有单个叶子图形变更的失败不变保证；后续对容器及多对象修改，需要另行验证整条命令的原子性。
 用户手动体验与设计讨论独立记录，未实现功能不记为测试通过。
