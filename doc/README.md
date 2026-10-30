@@ -1,12 +1,13 @@
 # 架构方案
 
-## 本轮边界
+## 交付范围
 
 第一轮实现 init、create rect、tree（含 tree id）、move；第二轮增加 circle；第三轮增加 ellipse、line、text。
 第四轮增加 g 容器、create ... in、嵌套 tree 和整组 move；第五轮增加 scale、set、show。
 第六轮增加 delete、front、back；第七轮增加 group、addto、ungroup；第八轮增加 undo/redo 与 init 历史边界。
 第九轮增加 help、canvas 查询/修改与对应历史边界；第十轮增加 save；第十一轮增加 read、补 ID、读入路径及对应历史边界。
-当前不是完整的 Phase 1 提交版本；不创建 final tag。
+第十二轮完成课设第 6 节与第 6.1 节版本 A 的综合验收、架构复核和交付文档。
+Phase 1 在下述明确支持范围内实现完成；最终提交用 final tag 标记。AI 验收结果与用户尚未反馈的手动体验分开记录。
 
 ## 模块职责与依赖
 
@@ -15,10 +16,10 @@
 | src/domain | Shape、五类叶子、GroupShape、SvgDocument；封装几何行为、对象树、唯一 id 和查找；DrawingWriter 定义输出行为契约 | 本模块、语言标准库 |
 | src/application | 当前文档会话、Command/EditCommand、HistoryEntry；管理编辑、历史及读入路径，DocumentSaver/DocumentReader 定义读写端口，LoadedDocument 封装导入结果 | domain、本模块 |
 | src/infrastructure | SvgWriter/SvgReader 转换 XML；XmlElement 封装临时解析树；SvgFileStore 处理 UTF-8 文件读写与目标替换 | domain、application、本模块、Node 标准库、saxes |
-| src/cli | 分词、唯一命令分派入口、终端读写和错误显示 | application，本模块 |
-| src/Main.ts | 组装并启动应用，注入具体保存实现 | cli、application、infrastructure |
+| src/cli | 分词、唯一命令分派入口、终端读写和错误显示 | application、本模块、Node 终端标准库 |
+| src/Main.ts | 组装并启动应用，注入具体读写实现 | cli、application、infrastructure |
 
-领域层不读终端、不写 console、不访问文件；应用层依赖保存端口，不依赖基础设施。命令只调用对象行为，不直接改坐标。
+领域层不读终端、不写 console、不访问文件；应用层依赖读写端口，不依赖基础设施。命令只调用对象行为，不直接改坐标。
 初期把文本描述方法放在模型中，减少学习入口；树和显示复杂后评估提取 presentation。
 
 ```plantuml
@@ -111,9 +112,9 @@ infrastructure --> domain
 提交包含对应代码、测试和文档修订；每轮报告实际提交号与同步状态。
 不改写已有提交来伪造学习过程，用户手动验收和观点仅按其实际反馈记录。
 
-## 后续迭代安排
+## 阶段进度与交付安排
 
-以下是当前方案，按功能和验收点安排；每阶段可分成一至两轮，不一次实现完全部阶段。
+以下保留分阶段推进的安排与最终完成状态；复杂阶段分轮实施，没有一次生成全部结果。
 每轮依次完成目标说明、有限实现、测试/代码复核、过程记录、Git 提交和推送，再结合用户反馈继续。
 
 | 阶段 | 实现范围 | 验收重点 | 学习与设计讨论 |
@@ -125,7 +126,7 @@ infrastructure --> domain
 | 辅助命令（已实现） | help、canvas | 第九轮新增 8 组测试通过；尺寸查询跳过历史；修改成功后清空并禁用历史，失败保留文档及历史 | 区分查询、可撤销编辑与文档操作；验证/复制完成后再替换文档 |
 | SVG 保存（已实现） | save、输出转换与 IO 历史边界 | 第十轮新增 12 组测试通过；失败保留旧文件和历史；浏览器渲染、叠放及字符还原通过 | 模型、XML 和文件 IO 的职责分离；默认路径必须来自 read |
 | SVG 读取（已实现） | read、补 id、往返验证及读入路径 | 第十一轮新增 18 组测试通过；先预留 ID 再补缺失；失败保留文档/路径/历史；无参 save 回到读入路径 | 用户已选择正式子集并拒绝扩展属性；理解良构性与领域校验、候选文档与一次接收 |
-| 最终验收与交付（下一轮） | 完整示例、边界测试、架构审查、文档与 final | 第 6 节和 6.1 版本 A 回放；错误文本及状态核对；一类一文件、依赖与两处分派检查；远程 main 与 final 均验证 | 对照最初方案解释真实改动及已确认范围；过程记录不代写尚未发生的学习体验 |
+| 最终验收与交付（已验收） | 完整示例、边界测试、架构审查、文档与 final | 新增 2 组综合测试，总计 118 组通过；两段课设会话、流程图浏览器显示、一类一文件、依赖与两处分派检查通过；发布时核验远程 main 与 final 指向同一提交 | README 提供三项复习与短演示；过程记录不代写尚未发生的学习体验 |
 
 第十轮已引入 infrastructure 及必要输出/保存契约，并同步修订依赖图；展示和树查询复杂化时再评估提取 presentation。
 box、动态插件框架和图形界面均不列入本期交付。
@@ -267,6 +268,18 @@ box、动态插件框架和图形界面均不列入本期交付。
 - 实际回放 step-11.commands.txt：other.svg 自动补 rect1 并读入 7 元素，缺失文件错误后仍可 redo，另存再读入后无参 save 更新 step-11.svg；确认课设原始 other.svg 未改变。上一轮 step-10.svg 读入再输出逐字一致。
 - 独立只读复核实现与测试未发现需修复的问题。用户本轮参与了读取范围选择，但尚未报告手动运行和代码理解结果；不把 AI 测试写成用户已掌握。
 
+## 2026-10-30：综合验收与交付准备
+
+- 用户要求继续执行。本轮只补综合验收、可回放材料和文档，产品源代码未修改，也没有扩大已确认的 SVG 读取范围。
+- 逐条对照任务书的正式命令、错误约定、设计模式和提交要求。第 6 节典型会话及第 6.1 节版本 A 分别保存为 course-session.commands.txt、course-flowchart.commands.txt，保持原命令参数及顺序；box 版本 B 仍按阶段边界排除。
+- 新增 2 组真实 CLI 综合测试。典型会话核对祖孙分组和保存后撤销两条精确错误、5 元素保存状态、补 ID 警告和读入后的 7 元素树；流程图测试在移动和撤销后插入只读查询，核对矩形与文字一起移动/恢复，保存 8 元素及“处理数据 v2”，读回后仍能编辑和撤销。
+- 首次全量严格编译与测试 118/118 通过，无失败或跳过。测试在隔离目录运行，检查 other.svg 不被改动、读写往返一致和临时文件清理。
+- 另行按原脚本实际生成 examples/demo.svg 和 examples/flowchart.svg。AI 在 Edge 中验证流程图无 XML 错误、800×600 画布、8 元素、蓝/橙矩形、中文文字和连接线；AI 检查截图，图形和文字未裁切。浏览器验证独立于 npm test。
+- 用 TypeScript AST 扫描并独立只读复核：src 有 46 个文件、44 个同名独立类及 2 个接口；没有顶层自由函数或公共状态字段，没有领域/应用向基础设施的反向依赖。命令和图形名称到实现的分派仍仅两处。
+- 复核发现依赖表漏写 CLI 对 node:readline 的合理依赖，已补为“Node 终端标准库”；Main 职责从“注入保存实现”修正为“注入读写实现”。这是文档与实际职责的对齐，没有修改代码来迁就检查。
+- 保留此前全部真实提交，本轮追加验收提交并以带说明的 final 标签交付；发布核对要求为远程 main 与 final 解引用指向同一验收提交。实际提交号、标签对象及时间由 Git 保存，不在本文件自引用自身提交号。
+- 用户此前真实参与了协作粒度纠正、独立仓库与逐轮提交要求、分组位置、快照与读取范围选择。本轮 README 提供短演示和三项代码复习；尚未收到用户自己的手动结果或理解说明，保持待反馈。课程截止时间仍未提供，不声称已核对按时提交。
+
 # 一致性自查
 
 第十轮新增 infrastructure，第十一轮在该模块补齐读取；方案与依赖图已同步。src 下 44 个类各自放在同名文件，另有 CommandToken 输入接口与 DrawingWriter 输出接口。
@@ -285,11 +298,26 @@ box、动态插件框架和图形界面均不列入本期交付。
 - Shape.writeTo 只依赖领域输出契约，TextShape 多态提供内容；SvgWriter 对名称统一生成元素，不按名称选择实现。输出属性是临时只读数据，领域对象的私有字段与行为仍保留。
 - EditorSession 依赖 application 内的 DocumentSaver/DocumentReader；SvgFileStore 实现两个端口，LoadedDocument 封装完整输入结果。文件 API 和 saxes 仅在 infrastructure，Main 负责组装；没有 application/domain 到 infrastructure 的反向依赖。
 - SvgReader 只识别文档根及通用结构规则，通过 factory.createFromSvg 构建所有图形。工厂的两个公开入口共用一套私有类型分支；属性白名单与文字恢复属于图形类的多态行为，没有增加第三处名称到图形实现的分派。
-- 全部命令已接入，以上为前十一个增量的一致性检查；最终交付前仍须综合验收及核对文档、远程提交与 final tag。
+- 最终复核覆盖全部源码的类名/文件名与 import 关系；CLI 允许 Node 终端标准库，基础设施允许 Node 文件 API 与 saxes。类的行为、两处分派和 Command/Composite 调用关系另经人工只读检查，不能只凭文件数判断架构合格。
+- 全部 19 条命令与六类图形已接入。正式输入范围、补充约定和后续插件边界均已记录；没有将背景中的 transform/font-size 或未来 box 语义悄悄当作已实现能力。
 
 # 质量保证手段
 
-执行 `npm test`：TypeScript 严格编译通过，Node 内置测试运行器 116/116 通过（第一轮 9 组，第二轮 5 组，第三轮 10 组，第四轮 10 组，第五轮 10 组，第六轮 10 组，第七轮 12 组，第八轮 12 组，第九轮 8 组，第十轮 12 组，第十一轮 18 组）。
+执行 `npm test`：TypeScript 严格编译通过，Node 内置测试运行器 118/118 通过（第一轮 9 组，第二轮 5 组，第三轮 10 组，第四轮 10 组，第五轮 10 组，第六轮 10 组，第七轮 12 组，第八轮 12 组，第九轮 8 组，第十轮 12 组，第十一轮 18 组，第十二轮 2 组综合验收）。
+
+## 对照提交要求
+
+| 任务书要求 | 验收依据 |
+| --- | --- |
+| 19 条命令、六类图形与统一错误处理 | 前十一轮功能/边界测试及 HelpCommand 命令语法检查；下表列出具体覆盖 |
+| Command、Composite、封装、一类一文件、两处分派 | 源码 AST 扫描与只读代码复核；具体职责见“一致性自查” |
+| 完整典型会话和两节点流程图 A | FinalAcceptance.test.ts 通过真实 CLI 检查状态与文件；两份原命令脚本及生成 SVG 可复现 |
+| SVG 可供浏览器预览 | 第十轮样式/叠放/字符验证；本轮流程图 A 在 Edge 实际渲染检查 |
+| doc/README.md 的四个规定章节及 PlantUML | 本文件保留架构方案、过程记录、一致性自查、质量保证手段；架构图位于第一节 |
+| 真实分步 Git 历史、远程仓库及 final | 保留独立仓库的逐轮提交；最终验收提交与 final 一起发布并核对远程引用，不改写既有历史 |
+| 截止时间与学生学习过程 | 截止时间未提供，无法判断是否按时；学生已作出的选择据实记录，未反馈的手动验收与学习体会不代写 |
+
+## 功能与边界覆盖
 
 | 验证内容 | 结果 |
 | --- | --- |
@@ -366,12 +394,15 @@ box、动态插件框架和图形界面均不列入本期交付。
 | 另存保留读入路径，成功 init 清路径，失败 init 和 canvas/history 保留路径 | 通过 |
 | 多次 read 切换路径、读取器复用不残留状态、中文空格路径真实 CLI 回放 | 通过 |
 | 第十一轮实际脚本读写，other.svg 原文件不变、失败后 redo 和无参保存 | AI 验证通过 |
+| 课设典型会话完整回放：两条指定错误、保存 5 元素、读入 7 元素 | 通过 |
+| 流程图 A：整组移动/撤销、8 元素与文字 v2、重新读取编辑、IO 历史边界 | 通过 |
+| 本轮 flowchart.svg 在 Edge 的尺寸、元素、颜色、文字及连线 | AI 验证通过 |
 | 交互终端 svg> 提示符和最小命令链 | AI 验证通过 |
 | 用户手动验收与关键代码讨论 | 待用户反馈 |
 
-功能测试文件为 tests/FirstIncrement.test.ts、tests/CircleIncrement.test.ts、tests/LeafShapesIncrement.test.ts、tests/CommandTokenizer.test.ts、tests/GroupIncrement.test.ts、tests/AttributeIncrement.test.ts、tests/TreeEditingIncrement.test.ts、tests/GroupingIncrement.test.ts、tests/HistoryIncrement.test.ts、tests/CanvasHelpIncrement.test.ts、tests/SaveIncrement.test.ts 与 tests/ReadIncrement.test.ts；回放脚本为 examples/step-01.commands.txt 至 examples/step-11.commands.txt。课设 other.svg 与第十、十一轮的实际输出随脚本保存，浏览器检查独立于 npm test。
+功能测试文件为 tests/FirstIncrement.test.ts、tests/CircleIncrement.test.ts、tests/LeafShapesIncrement.test.ts、tests/CommandTokenizer.test.ts、tests/GroupIncrement.test.ts、tests/AttributeIncrement.test.ts、tests/TreeEditingIncrement.test.ts、tests/GroupingIncrement.test.ts、tests/HistoryIncrement.test.ts、tests/CanvasHelpIncrement.test.ts、tests/SaveIncrement.test.ts、tests/ReadIncrement.test.ts 与 tests/FinalAcceptance.test.ts；回放脚本为 examples/step-01.commands.txt 至 examples/step-11.commands.txt，以及 examples/course-session.commands.txt、examples/course-flowchart.commands.txt。课设 other.svg、第十/十一轮输出及最终 demo.svg/flowchart.svg 随脚本保存，浏览器检查独立于 npm test。
 一组测试可以覆盖多个边界用例；以上表格不表示每行均对应一个独立测试。
 
 读写均已验证带反斜杠的绝对路径、中文空格文件名及相对路径，默认保存目标按成功读取时的绝对路径固定。
-当前编辑与全部文档命令已测试成功/失败边界；下一轮进行课设整体回放与最终一致性验收，不把“命令已接入”直接等同最终交付完成。
+当前编辑与全部文档命令已测试成功/失败边界，并完成课设整体回放、浏览器检查与最终一致性验收。测试覆盖已说明的课程子集，不代表支持任意 SVG、无限文档规模或断电持久性。
 用户手动体验与设计讨论独立记录，未实现功能不记为测试通过。

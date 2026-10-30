@@ -5,10 +5,10 @@
 
 ## 当前增量
 
-第一轮实现最小矩形编辑流程；第二轮增加圆形；第三轮增加椭圆、线段和文字；第四轮加入 g 容器；第五轮加入 scale、set、show；第六轮加入 delete、front、back；第七轮加入 group、addto、ungroup；第八轮加入 undo/redo；第九轮加入 help、canvas；第十轮加入 save；第十一轮加入 read。
+第一轮实现最小矩形编辑流程；第二轮增加圆形；第三轮增加椭圆、线段和文字；第四轮加入 g 容器；第五轮加入 scale、set、show；第六轮加入 delete、front、back；第七轮加入 group、addto、ungroup；第八轮加入 undo/redo；第九轮加入 help、canvas；第十轮加入 save；第十一轮加入 read；第十二轮完成综合验收。
 当前已接入课设全部 19 条命令，包括六类图形编辑、撤销重做、帮助、画布查询/修改与支持范围内的 SVG 读写。
-116 组自动测试通过；六类对象读写往返保持模型和输出文本一致。用户已选择分组位置、文档快照和读取子集范围，尚未反馈具体手动验收结果。
-已接入支持范围内的 SVG 读取、自动补 ID 与保存到读入路径；最终综合验收留到下一轮，不提前创建 final tag。
+118 组自动测试通过；课设两段完整会话、六类读写往返和流程图浏览器预览通过验证。用户已选择分组位置、文档快照和读取子集范围，尚未反馈具体手动验收结果。
+Phase 1 支持范围内的实现及 AI 综合验收已完成，最终交付版本以 final tag 为准。演示与复习步骤见“第十二轮”。
 
 ## Git 迭代约定
 
@@ -452,6 +452,63 @@ other.svg 来自课设示例：根级白色矩形没有 ID，其余 ID 均保留
 
 XML 语法处理交给固定版本 [saxes](https://github.com/lddubeau/saxes)，项目负责检查 SVG 支持范围。这样可以复习“语法正确”和“本程序能够完整表达”是两道不同的校验。
 
+## 第十二轮：综合验收与演示
+
+本轮围绕课设第 6 节典型会话及第 6.1 节版本 A 进行验收，没有增加新的产品功能。
+两份脚本保留课设命令顺序与参数；成功反馈沿用本工程的摘要格式，规定的错误文本严格核对。
+
+| 回放脚本 | 输出 | 重点观察 |
+| --- | --- | --- |
+| [course-session.commands.txt](examples/course-session.commands.txt) | [demo.svg](examples/demo.svg) | 分组后继续编辑，撤销文字修改和删除，保存 5 个元素；随后读取 other.svg 得到 7 个元素 |
+| [course-flowchart.commands.txt](examples/course-flowchart.commands.txt) | [flowchart.svg](examples/flowchart.svg) | 8 个元素构成两节点流程图；移动 node2 时矩形、文字一起移动，undo 后恢复，最终文字为“处理数据 v2” |
+
+自动验收在隔离目录执行真实 CLI，检查错误、输出文件及重新读入的模型，并清理临时目录：
+
+```powershell
+npm test
+```
+
+想实际重新生成流程图，可在工程根目录运行（会更新 examples/flowchart.svg）：
+
+```powershell
+npm run build
+Push-Location examples
+node -e "const fs=require('node:fs'),cp=require('node:child_process');const r=cp.spawnSync(process.execPath,['../dist/src/Main.js'],{input:fs.readFileSync('course-flowchart.commands.txt'),encoding:'utf8'});process.stdout.write(r.stdout);process.stderr.write(r.stderr);process.exitCode=r.status??1"
+Pop-Location
+```
+
+浏览器打开 examples/flowchart.svg 即可预览。连接线是课设要求的普通 line，没有另加箭头或扩展属性。
+典型会话脚本同样在 examples 目录运行，将文件名改为 course-session.commands.txt；它恰好产生两条预期错误：祖孙不能同时分组、save 后不能 undo。
+
+### 适中的复习任务
+
+在工程根目录启动 `npm run cli`，用已经生成的流程图做一次短实验：
+
+```text
+read examples/flowchart.svg
+move node2 0 100
+show process
+show process-label
+undo
+show process
+```
+
+移动后矩形 y=200、文字 y=235；撤销后矩形 y=100。不要执行 save，就不会修改示例文件。
+结合运行结果，用自己的话解释下面三个问题即可，不需要重写函数：
+
+1. 为什么 MoveCommand 不用区分矩形和组？沿 [MoveCommand](src/application/commands/MoveCommand.ts) → [Shape](src/domain/Shape.ts) → [GroupShape](src/domain/GroupShape.ts) 看调用关系：命令表达意图，具体对象实现移动行为。
+2. 为什么撤销一次就能同时恢复矩形和文字？看 [EditorSession.edit](src/application/EditorSession.ts) 和 [HistoryEntry](src/application/HistoryEntry.ts)：历史记录对应整条编辑命令，保存的是完整文档前后状态。
+3. 为什么 read/save 成功后不能继续撤销此前编辑？这是课设规定的历史边界；会话在文档操作成功后清空两栈，而失败操作保留它们。
+
+这里提供的是运行预期和阅读线索。用户自己的观察、疑问与结论，应在实际反馈后再补入过程记录。
+
+### 交付核对
+
+- 代码入口：[src/Main.ts](src/Main.ts)；正式架构、真实过程、一致性自查和质量保证：[doc/README.md](doc/README.md)。
+- 支持范围：19 条命令、六类图形；读取约定见上文。box、动态插件和图形界面属于后续阶段。
+- 使用 `git log --oneline --decorate` 查看分步提交，使用 `git show final --no-patch` 查看最终标记；远程记录以仓库实际分支和标签为准。
+- 用户尚未提供课程截止时间；不能据此断言提交已满足截止时间要求。用户手动验收与学习体会仍需本人补充。
+
 ## 前几轮阅读回顾
 
 1. [LineShape.ts](src/domain/LineShape.ts)：一次移动要更新两个端点，先检查四个新坐标，再一起赋值。
@@ -484,9 +541,9 @@ XML 语法处理交给固定版本 [saxes](https://github.com/lddubeau/saxes)，
 | 3B. 辅助命令（已实现） | help、canvas | 86 组测试通过；查询保留历史，成功修改尺寸清历史，失败保留状态 |
 | 4A. SVG 保存（已实现） | save、SVG 输出与保存历史边界 | 98 组测试通过；六类输出与转义、失败保留旧文件和历史；浏览器预览通过 |
 | 4B. SVG 读取（已实现） | read、缺失 id 补全、读入路径与历史边界 | 116 组测试通过；采用用户选定的正式子集；六类读写一致；失败保留文档、路径与历史 |
-| 5. 最终验收（下一轮） | 全命令回放、架构检查、文档修订、final tag | 对照课设检查完整性及支持范围，整理真实过程与用户反馈，最终提交和远程 tag 一致 |
+| 5. 最终验收（已完成） | 课设完整会话回放、架构检查、文档修订、final tag | 118 组测试通过；两段课设会话及流程图浏览器验证通过；44 类、一类一文件、两处分派和依赖方向已复核 |
 
-详细验收点和待讨论取舍见 doc/README.md 的“后续迭代安排”。box 与动态插件不属于本阶段。
+详细验收点和设计取舍见 doc/README.md 的“阶段进度与交付安排”。接下来由用户进行演示、复习关键调用关系并补充真实学习体会；发现具体问题后再单独修正和提交。box 与动态插件不属于本阶段。
 
 独立远程仓库：https://github.com/CYBetter/svg-editor-cli-learning
 
