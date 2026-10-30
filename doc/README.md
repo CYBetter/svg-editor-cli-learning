@@ -1,5 +1,29 @@
 # 架构方案
 
+## 项目与提交信息
+
+**项目名称：Lab1 Phase 1 — SVG 命令行编辑器（TypeScript）**
+
+**Git 仓库地址：[https://github.com/CYBetter/svg-editor-cli-learning](https://github.com/CYBetter/svg-editor-cli-learning)**
+
+- 最终版本：[final 标签](https://github.com/CYBetter/svg-editor-cli-learning/tree/final)。
+- 开发记录：[分步提交历史](https://github.com/CYBetter/svg-editor-cli-learning/commits/main/)。
+- 本文在仓库中的位置为 `doc/README.md`，包含课设要求的架构方案、过程记录、一致性自查、质量保证手段四节。向课程平台上传时只需提交本文件，文件名保持 `README.md`；代码、测试、示例及 Git 历史通过上面的仓库地址查看。
+- 仓库访问：当前为私有仓库，教师需要仓库访问权限；提交 README 本身不会自动授予访问权。
+
+从仓库复现（Node.js 18.17 或更新版本，npm）：
+
+```text
+git clone https://github.com/CYBetter/svg-editor-cli-learning.git
+cd svg-editor-cli-learning
+git checkout final
+npm ci
+npm test
+npm run cli
+```
+
+截至 2026-10-30，本地严格编译与 118 组测试通过；正式 19 条命令、六类图形及课设两段会话已验证。读取支持范围见下文，不表示兼容任意 SVG。课程截止时间未提供，无法据此判断是否按时提交；用户未反馈的手动体验不代写为完成。
+
 ## 交付范围
 
 第一轮实现 init、create rect、tree（含 tree id）、move；第二轮增加 circle；第三轮增加 ellipse、line、text。
@@ -280,6 +304,14 @@ box、动态插件框架和图形界面均不列入本期交付。
 - 保留此前全部真实提交，本轮追加验收提交并以带说明的 final 标签交付；发布核对要求为远程 main 与 final 解引用指向同一验收提交。实际提交号、标签对象及时间由 Git 保存，不在本文件自引用自身提交号。
 - 用户此前真实参与了协作粒度纠正、独立仓库与逐轮提交要求、分组位置、快照与读取范围选择。本轮 README 提供短演示和三项代码复习；尚未收到用户自己的手动结果或理解说明，保持待反馈。课程截止时间仍未提供，不声称已核对按时提交。
 
+## 2026-10-30：提交材料复核
+
+- 用户明确最终向课程平台提交一份 README.md，文件内容须包含 Git 仓库地址。复核发现根 README 虽有项目地址，正式的 doc/README.md 却未写出，单独提交后缺少直接入口。
+- 在本文首部补齐项目名称、完整 Git 地址、final 标签、提交历史入口和复现步骤；四个规定章节保留在同一文件中。根 README 只增加正式提交文件的指引，避免把学习手册当作课程报告。
+- 再次运行严格编译和全部测试，118/118 通过；代码、测试和示例未改动。本轮修订只完善提交材料，单独形成文档提交。
+- 远程核验确认既有 final 对应 b24e731 的综合验收版本。文档补齐后，用 final-before-submission 保留原标签对象，再将 final 更新到包含本提交材料的版本，使标签中的 README 也有仓库地址；不删除或重写已有开发提交。
+- 仓库权限与截止时间单独核对，不将“作者能够访问私有仓库”写成“教师能够访问”。
+
 # 一致性自查
 
 第十轮新增 infrastructure，第十一轮在该模块补齐读取；方案与依赖图已同步。src 下 44 个类各自放在同名文件，另有 CommandToken 输入接口与 DrawingWriter 输出接口。
@@ -298,7 +330,7 @@ box、动态插件框架和图形界面均不列入本期交付。
 - Shape.writeTo 只依赖领域输出契约，TextShape 多态提供内容；SvgWriter 对名称统一生成元素，不按名称选择实现。输出属性是临时只读数据，领域对象的私有字段与行为仍保留。
 - EditorSession 依赖 application 内的 DocumentSaver/DocumentReader；SvgFileStore 实现两个端口，LoadedDocument 封装完整输入结果。文件 API 和 saxes 仅在 infrastructure，Main 负责组装；没有 application/domain 到 infrastructure 的反向依赖。
 - SvgReader 只识别文档根及通用结构规则，通过 factory.createFromSvg 构建所有图形。工厂的两个公开入口共用一套私有类型分支；属性白名单与文字恢复属于图形类的多态行为，没有增加第三处名称到图形实现的分派。
-- 最终复核覆盖全部源码的类名/文件名与 import 关系；CLI 允许 Node 终端标准库，基础设施允许 Node 文件 API 与 saxes。类的行为、两处分派和 Command/Composite 调用关系另经人工只读检查，不能只凭文件数判断架构合格。
+- 最终复核覆盖全部源码的类名/文件名与 import 关系；CLI 允许 Node 终端标准库，基础设施允许 Node 文件 API 与 saxes。类的行为、两处分派和 Command/Composite 调用关系另经 AI 只读检查，不能只凭文件数判断架构合格。
 - 全部 19 条命令与六类图形已接入。正式输入范围、补充约定和后续插件边界均已记录；没有将背景中的 transform/font-size 或未来 box 语义悄悄当作已实现能力。
 
 # 质量保证手段
@@ -314,6 +346,7 @@ box、动态插件框架和图形界面均不列入本期交付。
 | 完整典型会话和两节点流程图 A | FinalAcceptance.test.ts 通过真实 CLI 检查状态与文件；两份原命令脚本及生成 SVG 可复现 |
 | SVG 可供浏览器预览 | 第十轮样式/叠放/字符验证；本轮流程图 A 在 Edge 实际渲染检查 |
 | doc/README.md 的四个规定章节及 PlantUML | 本文件保留架构方案、过程记录、一致性自查、质量保证手段；架构图位于第一节 |
+| 单独上传 README.md，文内包含 Git 地址 | 本文件首部给出完整仓库地址、final、开发历史和复现步骤；文档正文不依赖同目录的额外文件才能阅读 |
 | 真实分步 Git 历史、远程仓库及 final | 保留独立仓库的逐轮提交；最终验收提交与 final 一起发布并核对远程引用，不改写既有历史 |
 | 截止时间与学生学习过程 | 截止时间未提供，无法判断是否按时；学生已作出的选择据实记录，未反馈的手动验收与学习体会不代写 |
 
